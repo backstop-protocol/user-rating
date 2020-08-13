@@ -1,0 +1,29 @@
+{
+  "name": "user-rating",
+  "version": "1.0.0",
+  "description": "User Rating",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/backstop-protocol/user-rating.git"
+  },
+  "author": "Smart Future Labs",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/backstop-protocol/user-rating/issues"
+  },
+  "homepage": "https://github.com/backstop-protocol/user-rating#readme",
+  "devDependencies": {
+    "@nomiclabs/buidler": "^1.4.3",
+    "@nomiclabs/buidler-ethers": "^2.0.0",
+    "@nomiclabs/buidler-waffle": "^2.0.0",
+    "@openzeppelin/contracts": "^2.5.1",
+    "chai": "^4.2.0",
+    "ethereum-waffle": "^3.0.2",
+    "ethers": "^5.0.8",
+    "solc": "^0.5.16"
+  }
+}
