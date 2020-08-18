@@ -1,6 +1,6 @@
 pragma solidity 0.5.16;
 
-import { IERC20 } from "../openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
+import { IERC20 } from "../../openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
 
 /**
  * @title Jar contract that receive User's rewards in ETH / ERC20
