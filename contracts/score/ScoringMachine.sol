@@ -1,6 +1,6 @@
 pragma solidity ^0.5.12;
 
-import { Ownable } from "../openzeppelin-contracts/contracts/ownership/Ownable.sol";
+import { Ownable } from "../../openzeppelin-contracts/contracts/ownership/Ownable.sol";
 
 contract ScoringMachine is Ownable {
     struct AssetScore {
@@ -76,7 +76,8 @@ contract ScoringMachine is Ownable {
         return 0;
     }
 
-    // Math with error code
+    // Math functions without errors
+    // ==============================
     function add(uint x, uint y) internal pure returns (uint z) {
         z = x + y;
         if(!(z >= x)) return 0;

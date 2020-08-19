@@ -1,15 +1,21 @@
 pragma solidity 0.5.16;
 
+// Other BProtocol contracts
+import { IScoringMachine } from "../score/IScoringMachine.sol";
+
+// Internal Libraries
+import { Exponential } from "../lib/Exponential.sol";
+
+// External Libraries
 import { Ownable } from "../../openzeppelin-contracts/contracts/ownership/Ownable.sol";
 
 /**
  * @title Jar Configuration contract
  */
-contract JarConfig is Ownable {
+contract JarConfig is Ownable, Exponential {
 
     // Minimum factor value
-    // TODO To Be Defined / corrected 
-    uint256 constant public MIN_FACTOR = 0.1e18; // 0.1
+    uint256 constant public MIN_FACTOR = 0.01e18; // 0.01
     // Maximum factor value, scaled to 1e18
     uint256 constant public MAX_FACTOR = 2e18; // 2.0
 
@@ -21,6 +27,8 @@ contract JarConfig is Ownable {
     uint256 public slashedScoreFactor;
     // Shasher score factor
     uint256 public slasherScoreFactor;
+    // Scoring Machine contract address
+    IScoringMachine public scoringMachine;
 
     enum ScoreType { Debt, Collateral, Slashed, Slasher }
     event ScoreFactorUpdated(ScoreType indexed, uint256 oldFactor, uint256 newFactor);
@@ -34,7 +42,7 @@ contract JarConfig is Ownable {
     }
 
     /**
-     * @dev JarConfig Constructor
+     * @dev JarConfig constructor, its an abstarct contract
      * @param _debtScoreFactor Debt score factor
      * @param _collScoreFactor Collateral score factor
      * @param _slashedScoreFactor Slashed score factor
@@ -44,14 +52,16 @@ contract JarConfig is Ownable {
         uint256 _debtScoreFactor,
         uint256 _collScoreFactor,
         uint256 _slashedScoreFactor,
-        uint256 _slasherScoreFactor
+        uint256 _slasherScoreFactor,
+        address _scoringMachine
     ) 
-        public 
+        internal 
     {
         setDebtScoreFactor(_debtScoreFactor);   
         setCollScoreFactor(_collScoreFactor);
         setSlashedScoreFactor(_slashedScoreFactor);
         setSlasherScoreFactor(_slasherScoreFactor);
+        scoringMachine = IScoringMachine(_scoringMachine);
     }
 
     /**
@@ -98,43 +108,78 @@ contract JarConfig is Ownable {
         emit ScoreFactorUpdated(ScoreType.Slasher, oldFactor, newFactor);
     }
 
+    /**
+     * @dev Get user's total score
+     * @param user Address of the user
+     * @param token Address of the token
+     * @return user's total score
+     */
+    function getUserScore(address user, address token) external view returns (uint256) {
+        // Get User score from the Scoring Machine
+        uint256 uDebtScore = getUserDebtScore(user, token);
+        uint256 uCollScore = getUserCollScore(user, token);
+        uint256 uSlashedScore = getUserSlashedScore(user, token);
+        uint256 uSlasherScore = getUserSlasherScore(user, token);
 
-    function getUserScore(address user) external view returns (uint256) {
-        // TODO get user score
-        uint256 userDebtScore = 0;
-        uint256 userCollScore = 0;
-        uint256 userSlashedScore = 0;
-        uint256 userSlasherScore = 0;
+        return _calcTotalScore(uDebtScore, uCollScore, uSlashedScore, uSlasherScore);
+    }
 
-        uint256 debtScore = mulTruncate(userDebtScore, debtScoreFactor);
-        uint256 collScore = mulTruncate(userCollScore, collScoreFactor);
-        uint256 slashedScore = mulTruncate(userSlashedScore, slashedScoreFactor);
-        uint256 slasherScore = mulTruncate(userSlasherScore, slasherScoreFactor);
+    /**
+     * @dev Get global total score
+     * @param token Address of the token
+     * @return global total score
+     */
+    function getGlobalScore(address token) external view returns (uint256) {
+        // Get Global score from the Scoring Machine
+        uint256 gDebtScore = getGlobalDebtScore(token);
+        uint256 gCollScore = getGlobalCollScore(token);
+        uint256 gSlashedScore = getGlobalSlashedScore(token);
+        uint256 gSlasherScore = getGlobalSlasherScore(token);
 
-        uint256 totalScore = add(add(debtScore, collScore), add(slashedScore, slasherScore));
+        return _calcTotalScore(gDebtScore, gCollScore, gSlashedScore, gSlasherScore);
+    }
+
+    /**
+     * @dev Calculate total scoring using factors
+     * @param debtScore User / Global debt score
+     * @param collScore User / Global collaternal score
+     * @param slashedScore User / Global slashed score
+     * @param slasherScore User / Global slasher score
+     */
+    function _calcTotalScore(
+        uint256 debtScore, 
+        uint256 collScore, 
+        uint256 slashedScore, 
+        uint256 slasherScore
+    ) 
+        internal 
+        view 
+        returns (uint256) 
+    {
+        uint256 debtScoreFac = mulTruncate(debtScore, debtScoreFactor);
+        uint256 collScoreFac = mulTruncate(collScore, collScoreFactor);
+        uint256 slashedScoreFac = mulTruncate(slashedScore, slashedScoreFactor);
+        uint256 slasherScoreFac = mulTruncate(slasherScore, slasherScoreFactor);
+
+        uint256 totalScore = add_(add_(debtScoreFac, collScoreFac), add_(slashedScoreFac, slasherScoreFac));
 
         return totalScore;
     }
 
-    function calculateGlobalScore() external view returns (uint256) {
+    // Abstract functions
+    // ===================
 
-    }
+    // User Score
+    // -----------
+    function getUserDebtScore(address user, address token) internal view returns (uint256);
+    function getUserCollScore(address user, address token) internal view returns (uint256);
+    function getUserSlashedScore(address user, address token) internal view returns (uint256);
+    function getUserSlasherScore(address user, address token) internal view returns (uint256);
 
-    // TODO Use Expnential library
-    function mulTruncate(uint256 a, uint256 b) internal pure returns (uint256) {
-        if (a == 0) {
-            return 0;
-        }
-        uint256 c = a * b;
-        require(c / a == b, "multiplication overflow");
-        return c / 1e18;
-    }
-
-    // TODO Use Expnential library
-    function add(uint256 a, uint256 b) internal pure returns (uint256) {
-        uint256 c = a + b;
-        require(c >= a, "addition overflow");
-
-        return c;
-    }
+    // Global Score
+    // -------------
+    function getGlobalDebtScore(address token) internal view returns (uint256);
+    function getGlobalCollScore(address token) internal view returns (uint256);
+    function getGlobalSlashedScore(address token) internal view returns (uint256);
+    function getGlobalSlasherScore(address token) internal view returns (uint256);
 }

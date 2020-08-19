@@ -1,11 +1,18 @@
 pragma solidity 0.5.16;
 
+// BProtocol contracts
+import { IJarConfig } from "./IJarConfig.sol";
+
+// Internal Libraries
+import { Exponential } from "../lib/Exponential.sol";
+
+// External Libraries
 import { IERC20 } from "../../openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
 
 /**
  * @title Jar contract that receive User's rewards in ETH / ERC20
  */
-contract Jar {
+contract Jar is Exponential {
 
     address internal constant ETH_ADDR = 0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE;
 
@@ -13,6 +20,8 @@ contract Jar {
     uint256 public roundId;
     // Enable withdraw of rewards after timelock
     uint256 public withdrawTimelock;
+    // Jar Config contract
+    IJarConfig public jarConfig;
     // (user => token => isUserWithdrawn) maintain the withdrawn status
     mapping(address => mapping(address => bool)) withdrawn;
 
@@ -31,11 +40,12 @@ contract Jar {
      * @param _roundId Round-id for which rewards are collected in this contract
      * @param _withdrawTimelock Withdraw timelock time in future
      */
-    constructor(uint256 _roundId, uint256 _withdrawTimelock) public {
+    constructor(uint256 _roundId, uint256 _withdrawTimelock, address _jarConfig) public {
         require(_withdrawTimelock > now, "incorrect-withdraw-timelock");
 
         roundId = _roundId;
         withdrawTimelock = _withdrawTimelock;
+        jarConfig = IJarConfig(_jarConfig);
     }
 
     /**
@@ -65,12 +75,18 @@ contract Jar {
         require(! hasWithdrawn, "user-withdrew-rewards-before");
 
         bool isEth = _isETH(token);
-        uint256 amount;
         uint256 totalBalance = isEth ? address(this).balance : IERC20(token).balanceOf(address(this));
 
-        // TODO calculate amount
+        uint256 userScore = jarConfig.getUserScore(user, token);
+        uint256 globalScore = jarConfig.getGlobalScore(token);
+        uint256 userPortion = div_(mul_(userScore, expScale), globalScore);
+
+        uint256 amount = mulTruncate(totalBalance, userPortion);
+
+        // user withdrawn token from Jar
         withdrawn[user][token] = true;
 
+        // send amount to the user
         if(isEth) {
             user.transfer(amount);
         } else {
@@ -93,4 +109,6 @@ contract Jar {
      * @dev Receive ETH sent to this contract
      */
     function () external payable {}
+
+
 }
