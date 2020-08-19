@@ -6,13 +6,10 @@ import { IScoringMachine } from "../score/IScoringMachine.sol";
 // Internal Libraries
 import { Exponential } from "../lib/Exponential.sol";
 
-// External Libraries
-import { Ownable } from "../../openzeppelin-contracts/contracts/ownership/Ownable.sol";
-
 /**
  * @title Jar Configuration contract
  */
-contract JarConfig is Ownable, Exponential {
+contract JarConfig is Exponential {
 
     // Minimum factor value
     uint256 constant public MIN_FACTOR = 0.01e18; // 0.01
@@ -30,8 +27,6 @@ contract JarConfig is Ownable, Exponential {
     // Scoring Machine contract address
     IScoringMachine public scoringMachine;
 
-    enum ScoreType { Debt, Collateral, Slashed, Slasher }
-    event ScoreFactorUpdated(ScoreType indexed, uint256 oldFactor, uint256 newFactor);
 
     /**
      * @dev Modifier to validate the factor limit
@@ -57,55 +52,21 @@ contract JarConfig is Ownable, Exponential {
     ) 
         internal 
     {
-        setDebtScoreFactor(_debtScoreFactor);   
-        setCollScoreFactor(_collScoreFactor);
-        setSlashedScoreFactor(_slashedScoreFactor);
-        setSlasherScoreFactor(_slasherScoreFactor);
+        require( ! _isValidFactor(_debtScoreFactor), "not-a-valid-debt-factor");
+        require( ! _isValidFactor(_collScoreFactor), "not-a-valid-coll-factor");
+        require( ! _isValidFactor(_slashedScoreFactor), "not-a-valid-slashed-factor");
+        require( ! _isValidFactor(_slasherScoreFactor), "not-a-valid-slasher-factor");
+        
+        debtScoreFactor = _debtScoreFactor;
+        collScoreFactor = _collScoreFactor;
+        slashedScoreFactor = _slashedScoreFactor;
+        slasherScoreFactor = _slasherScoreFactor;
+        
         scoringMachine = IScoringMachine(_scoringMachine);
     }
 
-    /**
-     * @dev Sets new Debt score factor
-     * @notice Only Owner allowed to call this function
-     * @param newFactor New factor to set
-     */
-    function setDebtScoreFactor(uint256 newFactor) public onlyOwner validFactor(newFactor) {
-        uint256 oldFactor = debtScoreFactor;
-        debtScoreFactor = newFactor;
-        emit ScoreFactorUpdated(ScoreType.Debt, oldFactor, newFactor);
-    }
-
-    /**
-     * @dev Sets new Collateral score factor
-     * @notice Only Owner allowed to call this function
-     * @param newFactor New factor to set
-     */
-    function setCollScoreFactor(uint256 newFactor) public onlyOwner validFactor(newFactor) {
-        uint256 oldFactor = collScoreFactor;
-        collScoreFactor = newFactor;
-        emit ScoreFactorUpdated(ScoreType.Collateral, oldFactor, newFactor);
-    }
-
-    /**
-     * @dev Sets new Slashed score factor
-     * @notice Only Owner allowed to call this function
-     * @param newFactor New factor to set
-     */
-    function setSlashedScoreFactor(uint256 newFactor) public onlyOwner validFactor(newFactor) {
-        uint256 oldFactor = slashedScoreFactor;
-        slashedScoreFactor = newFactor;
-        emit ScoreFactorUpdated(ScoreType.Slashed, oldFactor, newFactor);
-    }
-
-    /**
-     * @dev Sets new Slasher score factor
-     * @notice Only Owner allowed to call this function
-     * @param newFactor New factor to set
-     */
-    function setSlasherScoreFactor(uint256 newFactor) public onlyOwner validFactor(newFactor) {
-        uint256 oldFactor = slasherScoreFactor;
-        slasherScoreFactor = newFactor;
-        emit ScoreFactorUpdated(ScoreType.Slasher, oldFactor, newFactor);
+    function _isValidFactor(uint256 factor) internal pure returns (bool) {
+        return factor >= MIN_FACTOR && factor <= MAX_FACTOR;
     }
 
     /**
