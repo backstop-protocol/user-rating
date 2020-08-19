@@ -7,9 +7,9 @@ import { IScoringMachine } from "../score/IScoringMachine.sol";
 import { Exponential } from "../lib/Exponential.sol";
 
 /**
- * @title Jar Configuration contract
+ * @title Scoring Configuration contract
  */
-contract JarConfig is Exponential {
+contract ScoringConfig is Exponential {
 
     // Minimum factor value
     uint256 constant public MIN_FACTOR = 0.01e18; // 0.01
@@ -37,7 +37,7 @@ contract JarConfig is Exponential {
     }
 
     /**
-     * @dev JarConfig constructor, its an abstarct contract
+     * @dev ScoringConfig constructor, its an abstarct contract
      * @param _debtScoreFactor Debt score factor
      * @param _collScoreFactor Collateral score factor
      * @param _slashedScoreFactor Slashed score factor
@@ -52,10 +52,10 @@ contract JarConfig is Exponential {
     ) 
         internal 
     {
-        require( ! _isValidFactor(_debtScoreFactor), "not-a-valid-debt-factor");
-        require( ! _isValidFactor(_collScoreFactor), "not-a-valid-coll-factor");
-        require( ! _isValidFactor(_slashedScoreFactor), "not-a-valid-slashed-factor");
-        require( ! _isValidFactor(_slasherScoreFactor), "not-a-valid-slasher-factor");
+        require(_isValidFactor(_debtScoreFactor), "not-a-valid-debt-factor");
+        require(_isValidFactor(_collScoreFactor), "not-a-valid-coll-factor");
+        require(_isValidFactor(_slashedScoreFactor), "not-a-valid-slashed-factor");
+        require(_isValidFactor(_slasherScoreFactor), "not-a-valid-slasher-factor");
         
         debtScoreFactor = _debtScoreFactor;
         collScoreFactor = _collScoreFactor;
@@ -65,6 +65,10 @@ contract JarConfig is Exponential {
         scoringMachine = IScoringMachine(_scoringMachine);
     }
 
+    /**
+     * @dev Is factor value valid under range
+     * @param factor Factor value to validate
+     */
     function _isValidFactor(uint256 factor) internal pure returns (bool) {
         return factor >= MIN_FACTOR && factor <= MAX_FACTOR;
     }
