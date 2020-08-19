@@ -156,12 +156,12 @@ contract JarConfig is Ownable, Exponential {
         view 
         returns (uint256) 
     {
-        uint256 debtScoreFac = mulTruncate(debtScore, debtScoreFactor);
-        uint256 collScoreFac = mulTruncate(collScore, collScoreFactor);
-        uint256 slashedScoreFac = mulTruncate(slashedScore, slashedScoreFactor);
-        uint256 slasherScoreFac = mulTruncate(slasherScore, slasherScoreFactor);
+        uint256 fDebtScore = mulTruncate(debtScore, debtScoreFactor);
+        uint256 fCollScore = mulTruncate(collScore, collScoreFactor);
+        uint256 fSlashedScore = mulTruncate(slashedScore, slashedScoreFactor);
+        uint256 fSlasherScore = mulTruncate(slasherScore, slasherScoreFactor);
 
-        uint256 totalScore = add_(add_(debtScoreFac, collScoreFac), add_(slashedScoreFac, slasherScoreFac));
+        uint256 totalScore = add_(add_(fDebtScore, fCollScore), add_(fSlashedScore, fSlasherScore));
 
         return totalScore;
     }
