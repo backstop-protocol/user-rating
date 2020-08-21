@@ -87,6 +87,10 @@ contract Jar is Exponential {
         bool isEth = _isETH(token);
         uint256 totalBalance = isEth ? address(this).balance : IERC20(token).balanceOf(address(this));
 
+        // In case `delegateEthExit` is not called and a user is withdrawing WETH, this
+        // check would prevent him to withdraw zero WETH
+        require(totalBalance > 0, "no-rewards-for-token");
+
         uint256 userScore = scoringConfig.getUserScore(user, token);
         uint256 globalScore = scoringConfig.getGlobalScore(token);
         uint256 userPortion = div_(mul_(userScore, expScale), globalScore);
@@ -117,8 +121,10 @@ contract Jar is Exponential {
 
     /**
      * @dev Delegate call to ETHExit contract to convert Maker gem to WETH
+     * @notice Function only be called after withdrawal is open, this is to prevent uneven 
+     *         distribution of WETH (from MakerDAO) rewards to the users
      */
-    function delegateEthExit() external {
+    function delegateEthExit() external withdrawOpen {
         (bool success,) = ethExit.delegatecall(abi.encodeWithSignature("ethExit()"));
         require(success, "eth-exit-delegate-call-failed");
     }
