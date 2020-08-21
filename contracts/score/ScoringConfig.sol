@@ -173,7 +173,6 @@ contract ScoringConfig is Exponential {
     // -------------
     /**
      * @dev Get global debt score
-     * @param user User address
      * @param token Token address
      * @return Global debt score
      */
@@ -181,7 +180,6 @@ contract ScoringConfig is Exponential {
 
     /**
      * @dev Get global collateral score
-     * @param user User address
      * @param token Token address
      * @return Global collateral score
      */
@@ -189,7 +187,6 @@ contract ScoringConfig is Exponential {
 
     /**
      * @dev Get global slashed score
-     * @param user User address
      * @param token Token address
      * @return Global slashed score
      */
@@ -197,7 +194,6 @@ contract ScoringConfig is Exponential {
 
     /**
      * @dev Get global slasher score
-     * @param user User address
      * @param token Token address
      * @return Global slasher score
      */ 

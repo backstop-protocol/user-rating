@@ -1,7 +1,7 @@
 pragma solidity 0.5.16;
 
 // BProtocol contracts
-import { IJarConfig } from "./IJarConfig.sol";
+import { IScoringConfig } from "../score/IScoringConfig.sol";
 
 // Internal Libraries
 import { Exponential } from "../lib/Exponential.sol";
@@ -20,8 +20,8 @@ contract Jar is Exponential {
     uint256 public roundId;
     // Enable withdraw of rewards after timelock
     uint256 public withdrawTimelock;
-    // Jar Config contract
-    IJarConfig public jarConfig;
+    // Scoring Config contract
+    IScoringConfig public scoringConfig;
     // (user => token => isUserWithdrawn) maintain the withdrawn status
     mapping(address => mapping(address => bool)) withdrawn;
 
@@ -39,13 +39,14 @@ contract Jar is Exponential {
      * @dev Constructor
      * @param _roundId Round-id for which rewards are collected in this contract
      * @param _withdrawTimelock Withdraw timelock time in future
+     * @param _scoringConfig Address of ScoringConfig contract
      */
-    constructor(uint256 _roundId, uint256 _withdrawTimelock, address _jarConfig) public {
+    constructor(uint256 _roundId, uint256 _withdrawTimelock, address _scoringConfig) public {
         require(_withdrawTimelock > now, "incorrect-withdraw-timelock");
 
         roundId = _roundId;
         withdrawTimelock = _withdrawTimelock;
-        jarConfig = IJarConfig(_jarConfig);
+        scoringConfig = IScoringConfig(_scoringConfig);
     }
 
     /**
@@ -77,8 +78,8 @@ contract Jar is Exponential {
         bool isEth = _isETH(token);
         uint256 totalBalance = isEth ? address(this).balance : IERC20(token).balanceOf(address(this));
 
-        uint256 userScore = jarConfig.getUserScore(user, token);
-        uint256 globalScore = jarConfig.getGlobalScore(token);
+        uint256 userScore = scoringConfig.getUserScore(user, token);
+        uint256 globalScore = scoringConfig.getGlobalScore(token);
         uint256 userPortion = div_(mul_(userScore, expScale), globalScore);
 
         uint256 amount = mulTruncate(totalBalance, userPortion);
@@ -109,6 +110,4 @@ contract Jar is Exponential {
      * @dev Receive ETH sent to this contract
      */
     function () external payable {}
-
-
 }
