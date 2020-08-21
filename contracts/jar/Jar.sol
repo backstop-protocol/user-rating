@@ -22,6 +22,8 @@ contract Jar is Exponential {
     uint256 public withdrawTimelock;
     // Scoring Config contract
     IScoringConfig public scoringConfig;
+    // ETHExit contract address
+    address public ethExit;
     // (user => token => isUserWithdrawn) maintain the withdrawn status
     mapping(address => mapping(address => bool)) withdrawn;
 
@@ -40,13 +42,20 @@ contract Jar is Exponential {
      * @param _roundId Round-id for which rewards are collected in this contract
      * @param _withdrawTimelock Withdraw timelock time in future
      * @param _scoringConfig Address of ScoringConfig contract
+     * @param _ethExit ETHExit contract address
      */
-    constructor(uint256 _roundId, uint256 _withdrawTimelock, address _scoringConfig) public {
+    constructor(
+        uint256 _roundId,
+        uint256 _withdrawTimelock, 
+        address _scoringConfig,
+        address _ethExit
+    ) public {
         require(_withdrawTimelock > now, "incorrect-withdraw-timelock");
 
         roundId = _roundId;
         withdrawTimelock = _withdrawTimelock;
         scoringConfig = IScoringConfig(_scoringConfig);
+        ethExit = _ethExit;
     }
 
     /**
@@ -104,6 +113,14 @@ contract Jar is Exponential {
      */
     function _isETH(address token) internal pure returns (bool) {
         return token == ETH_ADDR;
+    }
+
+    /**
+     * @dev Delegate call to ETHExit contract to convert Maker gem to WETH
+     */
+    function delegateEthExit() external {
+        (bool success,) = ethExit.delegatecall(abi.encodeWithSignature("ethExit()"));
+        require(success, "eth-exit-delegate-call-failed");
     }
 
     /**
