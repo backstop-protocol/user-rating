@@ -68,6 +68,7 @@ contract ScoringConfig is Exponential {
     /**
      * @dev Is factor value valid under range
      * @param factor Factor value to validate
+     * @return `true` when the factor is in valid range, `false` otherwise
      */
     function _isValidFactor(uint256 factor) internal pure returns (bool) {
         return factor >= MIN_FACTOR && factor <= MAX_FACTOR;
@@ -91,7 +92,7 @@ contract ScoringConfig is Exponential {
 
     /**
      * @dev Get global total score
-     * @param token Address of the token
+     * @param token Token address
      * @return global total score
      */
     function getGlobalScore(address token) external view returns (uint256) {
@@ -136,15 +137,69 @@ contract ScoringConfig is Exponential {
 
     // User Score
     // -----------
+    /**
+     * @dev Get user's debt score
+     * @param user User address
+     * @param token Token address
+     * @return User's debt score
+     */
     function getUserDebtScore(address user, address token) internal view returns (uint256);
+
+    /**
+     * @dev Get user's collateral score
+     * @param user User address
+     * @param token Token address
+     * @return User's collateral score
+     */
     function getUserCollScore(address user, address token) internal view returns (uint256);
+
+    /**
+     * @dev Get user's slashed score
+     * @param user User address
+     * @param token Token address
+     * @return User's slashed score
+     */
     function getUserSlashedScore(address user, address token) internal view returns (uint256);
+
+    /**
+     * @dev Get user's slasher score
+     * @param user User address
+     * @param token Token address
+     * @return User's slasher score
+     */ 
     function getUserSlasherScore(address user, address token) internal view returns (uint256);
 
     // Global Score
     // -------------
+    /**
+     * @dev Get global debt score
+     * @param user User address
+     * @param token Token address
+     * @return Global debt score
+     */
     function getGlobalDebtScore(address token) internal view returns (uint256);
+
+    /**
+     * @dev Get global collateral score
+     * @param user User address
+     * @param token Token address
+     * @return Global collateral score
+     */
     function getGlobalCollScore(address token) internal view returns (uint256);
+
+    /**
+     * @dev Get global slashed score
+     * @param user User address
+     * @param token Token address
+     * @return Global slashed score
+     */
     function getGlobalSlashedScore(address token) internal view returns (uint256);
+
+    /**
+     * @dev Get global slasher score
+     * @param user User address
+     * @param token Token address
+     * @return Global slasher score
+     */ 
     function getGlobalSlasherScore(address token) internal view returns (uint256);
 }
