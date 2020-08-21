@@ -6,6 +6,9 @@ jobs:
       - image: circleci/node:10.15.3
     steps:
       - checkout
+      - run:
+          name: Get sub-modules
+          command: git submodule update --init --recursive
       - restore_cache:
           key: dependency-cache-{{ checksum "package.json" }}
       - run:
