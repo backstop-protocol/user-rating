@@ -1,8 +1,5 @@
 pragma solidity 0.5.16;
 
-// Other BProtocol contracts
-import { IScoringMachine } from "../score/IScoringMachine.sol";
-
 // Internal Libraries
 import { Exponential } from "../lib/Exponential.sol";
 
@@ -25,7 +22,7 @@ contract ScoringConfig is Exponential {
     // Shasher score factor
     uint256 public slasherScoreFactor;
     // Scoring Machine contract address
-    IScoringMachine public scoringMachine;
+    address public scoringMachine;
 
 
     /**
@@ -62,7 +59,7 @@ contract ScoringConfig is Exponential {
         slashedScoreFactor = _slashedScoreFactor;
         slasherScoreFactor = _slasherScoreFactor;
         
-        scoringMachine = IScoringMachine(_scoringMachine);
+        scoringMachine = _scoringMachine;
     }
 
     /**
