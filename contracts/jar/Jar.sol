@@ -20,10 +20,10 @@ contract Jar is Exponential {
     uint256 public roundId;
     // Enable withdraw of rewards after timelock
     uint256 public withdrawTimelock;
-    // Scoring Config contract
-    IScoringConfig public scoringConfig;
-    // ETHExit contract address
-    address public ethExit;
+    // Is ETHExit called on MakerDAO?
+    bool public ethExitCalled = false;
+    // Connector contract address
+    IConnector public connector; 
     // (user => token => isUserWithdrawn) maintain the withdrawn status
     mapping(address => mapping(address => bool)) withdrawn;
 
@@ -38,42 +38,40 @@ contract Jar is Exponential {
     }
 
     /**
+     * @dev Receive ETH sent to this contract
+     */
+    function () external payable {}
+
+    /**
      * @dev Constructor
      * @param _roundId Round-id for which rewards are collected in this contract
      * @param _withdrawTimelock Withdraw timelock time in future
-     * @param _scoringConfig Address of ScoringConfig contract
-     * @param _ethExit ETHExit contract address
+     * @param _connector Connector contract address
      */
     constructor(
         uint256 _roundId,
         uint256 _withdrawTimelock, 
-        address _scoringConfig,
-        address _ethExit
+        address _connector
     ) public {
         require(_withdrawTimelock > now, "incorrect-withdraw-timelock");
 
         roundId = _roundId;
         withdrawTimelock = _withdrawTimelock;
-        scoringConfig = IScoringConfig(_scoringConfig);
-        ethExit = _ethExit;
+        connector = IConnector(_connector);
     }
 
     /**
-     * @dev msg.sender withdraw all his rewards of the given token
-     * @param token Token address to collect all rewards of that token
+     * @dev A user allowed to withdraw token rewards from Jar. A user can also withdraw on behalf
+     *      other user
+     * @param user CDP id in `bytes32` for MakerDAO. User's address for Compound.
+     * @param token Address of the token, which user is inteded to withdraw
      */
-    function withdraw(address token) external {
-        _withdraw(msg.sender, token);
+    function withdraw(bytes32 user, address token) external {
+        // Convert address to payable address
+        address payable owner = address(uint160(_toUser(user)));
+        _withdraw(owner, token);
     }
 
-    /**
-     * @dev Withdraw all rewards of a given token on behalf of a user
-     * @param user User's EOA for which rewards are withdrawn
-     * @param token Token address to collect all rewards of that token
-     */
-    function withdrawOnBehalfOf(address payable user, address token) external {
-        _withdraw(user, token);
-    }
 
     /**
      * @dev Internal withdraw function to withdraw all the user's reward of a specific token
@@ -81,18 +79,16 @@ contract Jar is Exponential {
      * @param token Withdraw all reward token balance of the user
      */
     function _withdraw(address payable user, address token) internal withdrawOpen {
+        require(ethExitCalled, "eth-exit-not-called-before");
+
         bool hasWithdrawn = withdrawn[user][token];
         require(! hasWithdrawn, "user-withdrew-rewards-before");
 
         bool isEth = _isETH(token);
         uint256 totalBalance = isEth ? address(this).balance : IERC20(token).balanceOf(address(this));
 
-        // In case `delegateEthExit` is not called and a user is withdrawing WETH, this
-        // check would prevent him to withdraw zero WETH
-        require(totalBalance > 0, "no-rewards-for-token");
-
-        uint256 userScore = scoringConfig.getUserScore(user, token);
-        uint256 globalScore = scoringConfig.getGlobalScore(token);
+        uint256 userScore = _getUserScore(user);
+        uint256 globalScore = _getGlobalScore();
         uint256 userPortion = div_(mul_(userScore, expScale), globalScore);
 
         uint256 amount = mulTruncate(totalBalance, userPortion);
@@ -119,18 +115,55 @@ contract Jar is Exponential {
         return token == ETH_ADDR;
     }
 
+    // Connector function calls
+    // =========================
+
     /**
-     * @dev Delegate call to ETHExit contract to convert Maker gem to WETH
-     * @notice Function only be called after withdrawal is open, this is to prevent uneven 
-     *         distribution of WETH (from MakerDAO) rewards to the users
+     * @dev Get the total user's score from the Connector
+     * @param user Address of the user
+     * @return The total score of the user
      */
-    function delegateEthExit() external withdrawOpen {
-        (bool success,) = ethExit.delegatecall(abi.encodeWithSignature("ethExit()"));
-        require(success, "eth-exit-delegate-call-failed");
+    function _getUserScore(address user) internal view returns (uint256) {
+        return connector.getUserScore(user);
     }
 
     /**
-     * @dev Receive ETH sent to this contract
+     * @dev Get the total Global score from the Connector
+     * @return The global total score
      */
-    function () external payable {}
+    function _getGlobalScore() internal view returns (uint256) {
+        return connector.getGlobalScore();
+    }
+
+    /**
+     * @dev Convert bytes32 user to address from the Connector
+     * @param user User's address in bytes32
+     * @return address of the user
+     */
+    function _toUser(bytes32 user) internal view returns (address) {
+        return connector.toUser(user);
+    }
+
+    // Delegate functions 
+    // ===================
+    
+    /**
+     * @dev Delegate call to Connector contract to convert Maker gem to WETH
+     * @notice Function only be called after withdrawal is open, this is to prevent uneven 
+     *         distribution of WETH (from MakerDAO) rewards to the users
+     */
+    function delegateEthExit() external {
+        (bool success,) = address(connector).delegatecall(abi.encodeWithSignature("ethExit()"));
+        require(success, "eth-exit-delegate-call-failed");
+        ethExitCalled = true;
+    }
+}
+
+/**
+ * @title Connection interface to connect to MakerDAO / Compound
+ */
+interface IConnector {
+    function getUserScore(address user) external view returns (uint256);
+    function getGlobalScore() external view returns (uint256);
+    function toUser(bytes32 user) external view returns (address);
 }
