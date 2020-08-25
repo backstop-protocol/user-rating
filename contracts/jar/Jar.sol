@@ -8,11 +8,14 @@ import { Exponential } from "../lib/Exponential.sol";
 
 // External Libraries
 import { IERC20 } from "../../openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
+import { SafeERC20 } from "../../openzeppelin-contracts/contracts/token/ERC20/SafeERC20.sol";
 
 /**
  * @title Jar contract that receive User's rewards in ETH / ERC20
  */
 contract Jar is Exponential {
+
+    using SafeERC20 for IERC20;
 
     address internal constant ETH_ADDR = 0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE;
 
@@ -24,16 +27,16 @@ contract Jar is Exponential {
     bool public ethExitCalled = false;
     // Connector contract address
     IConnector public connector; 
-    // (user => token => isUserWithdrawn) maintain the withdrawn status
-    mapping(address => mapping(address => bool)) withdrawn;
+    // (cdp/user {bytes32} => token => isUserWithdrawn) maintain the withdrawn status
+    mapping(bytes32 => mapping(address => bool)) withdrawn;
 
-    event Withdrawn(address indexed user, address token, uint256 amount);
+    event Withdrawn(bytes32 indexed user, address owner, address token, uint256 amount);
 
     /**
      * @dev Modifier to check if the withdrawal of rewards is open
      */
     modifier withdrawOpen() {
-        require(now > withdrawTimelock, "withdrawal-locked");
+        require(_isWithdrawOpen(), "withdrawal-locked");
         _;
     }
 
@@ -63,22 +66,19 @@ contract Jar is Exponential {
     /**
      * @dev A user allowed to withdraw token rewards from Jar. A user can also withdraw on behalf
      *      other user
-     * @param user CDP id in `bytes32` for MakerDAO. User's address for Compound.
+     * @param user CDP id for MakerDAO / User's address for Compound.
      * @param token Address of the token, which user is inteded to withdraw
      */
     function withdraw(bytes32 user, address token) external {
-        // Convert address to payable address
-        address payable owner = address(uint160(_toUser(user)));
-        _withdraw(owner, token);
+        _withdraw(user, token);
     }
-
 
     /**
      * @dev Internal withdraw function to withdraw all the user's reward of a specific token
-     * @param user Withdraw reward of the given user
+     * @param user CDP in case of MakerDAO, User address in case of Compound
      * @param token Withdraw all reward token balance of the user
      */
-    function _withdraw(address payable user, address token) internal withdrawOpen {
+    function _withdraw(bytes32 user, address token) internal withdrawOpen {
         require(ethExitCalled, "eth-exit-not-called-before");
 
         bool hasWithdrawn = withdrawn[user][token];
@@ -89,21 +89,22 @@ contract Jar is Exponential {
 
         uint256 userScore = _getUserScore(user);
         uint256 globalScore = _getGlobalScore();
-        uint256 userPortion = div_(mul_(userScore, expScale), globalScore);
 
-        uint256 amount = mulTruncate(totalBalance, userPortion);
+        uint256 amount = div_(mul_(userScore, totalBalance), globalScore);
 
         // user withdrawn token from Jar
         withdrawn[user][token] = true;
 
-        // send amount to the user
+        // send amount to the owner of the CDP / user
+        // Convert address to payable address
+        address payable owner = address(uint160(_toUser(user)));
         if(isEth) {
-            user.transfer(amount);
+            owner.transfer(amount);
         } else {
-            require(IERC20(token).transfer(user, amount), "transfer-failed");
+            IERC20(token).safeTransfer(owner, amount);
         }
 
-        emit Withdrawn(user, token, amount);
+        emit Withdrawn(user, owner, token, amount);
     }
 
     /**
@@ -115,15 +116,23 @@ contract Jar is Exponential {
         return token == ETH_ADDR;
     }
 
+    /**
+     * @dev Is withdrawal open
+     * @return `true` when withdrawal is open, `false` otherwise
+     */
+    function _isWithdrawOpen() internal view returns (bool) {
+        return now > withdrawTimelock;
+    }
+
     // Connector function calls
     // =========================
 
     /**
      * @dev Get the total user's score from the Connector
-     * @param user Address of the user
+     * @param user CDP id / User address
      * @return The total score of the user
      */
-    function _getUserScore(address user) internal view returns (uint256) {
+    function _getUserScore(bytes32 user) internal view returns (uint256) {
         return connector.getUserScore(user);
     }
 
@@ -155,7 +164,8 @@ contract Jar is Exponential {
     function delegateEthExit() external {
         (bool success,) = address(connector).delegatecall(abi.encodeWithSignature("ethExit()"));
         require(success, "eth-exit-delegate-call-failed");
-        ethExitCalled = true;
+
+        if(_isWithdrawOpen()) ethExitCalled = true;
     }
 }
 
@@ -163,7 +173,7 @@ contract Jar is Exponential {
  * @title Connection interface to connect to MakerDAO / Compound
  */
 interface IConnector {
-    function getUserScore(address user) external view returns (uint256);
+    function getUserScore(bytes32 user) external view returns (uint256);
     function getGlobalScore() external view returns (uint256);
     function toUser(bytes32 user) external view returns (address);
 }
