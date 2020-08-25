@@ -8,8 +8,6 @@ import { Exponential } from "../lib/Exponential.sol";
  */
 contract ScoringConfig is Exponential {
 
-    // Minimum factor value
-    uint256 constant public MIN_FACTOR = 0.01e18; // 0.01
     // Maximum factor value, scaled to 1e18
     uint256 constant public MAX_FACTOR = 2e18; // 2.0
 
@@ -29,7 +27,7 @@ contract ScoringConfig is Exponential {
      * @dev Modifier to validate the factor limit
      */
     modifier validFactor(uint256 factor) {
-        require(factor >= MIN_FACTOR && factor <= MAX_FACTOR, "not-a-valid-factor");
+        require(_isValidFactor(factor), "not-a-valid-factor");
         _;
     }
 
@@ -68,7 +66,7 @@ contract ScoringConfig is Exponential {
      * @return `true` when the factor is in valid range, `false` otherwise
      */
     function _isValidFactor(uint256 factor) internal pure returns (bool) {
-        return factor >= MIN_FACTOR && factor <= MAX_FACTOR;
+        return factor <= MAX_FACTOR;
     }
 
     /**
@@ -124,7 +122,8 @@ contract ScoringConfig is Exponential {
         uint256 fSlashedScore = mulTruncate(slashedScore, slashedScoreFactor);
         uint256 fSlasherScore = mulTruncate(slasherScore, slasherScoreFactor);
 
-        uint256 totalScore = add_(add_(fDebtScore, fCollScore), add_(fSlashedScore, fSlasherScore));
+        // debtScore + collSore + slasherScore - slashedScore
+        uint256 totalScore = sub_(add_(add_(fDebtScore, fCollScore), fSlasherScore), fSlashedScore);
 
         return totalScore;
     }
