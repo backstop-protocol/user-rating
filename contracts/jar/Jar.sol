@@ -65,20 +65,11 @@ contract Jar is Exponential {
 
     /**
      * @dev A user allowed to withdraw token rewards from Jar. A user can also withdraw on behalf
-     *      other user
+     *      other user as well.
      * @param user CDP id for MakerDAO / User's address for Compound.
      * @param token Address of the token, which user is inteded to withdraw
      */
-    function withdraw(bytes32 user, address token) external {
-        _withdraw(user, token);
-    }
-
-    /**
-     * @dev Internal withdraw function to withdraw all the user's reward of a specific token
-     * @param user CDP in case of MakerDAO, User address in case of Compound
-     * @param token Withdraw all reward token balance of the user
-     */
-    function _withdraw(bytes32 user, address token) internal withdrawOpen {
+    function withdraw(bytes32 user, address token) external withdrawOpen {
         require(ethExitCalled, "eth-exit-not-called-before");
 
         bool hasWithdrawn = withdrawn[user][token];
