@@ -4,6 +4,7 @@ jobs:
   build:
     docker:
       - image: circleci/node:10.15.3
+      command: ganache-cli
     steps:
       - checkout
       - run:
