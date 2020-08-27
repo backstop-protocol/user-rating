@@ -18,6 +18,9 @@ jobs:
       - run:
           name: Compile contracts
           command: npx buidler compile
+      - run:
+          name: Run tests
+          command: npx buidler test
       - save_cache:
           key: dependency-cache-{{ checksum "package.json" }}
           paths:
