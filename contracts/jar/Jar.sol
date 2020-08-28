@@ -28,7 +28,7 @@ contract Jar is Exponential {
     // Connector contract address
     IConnector public connector; 
     // (cdp/user {bytes32} => token => isUserWithdrawn) maintain the withdrawn status
-    mapping(bytes32 => mapping(address => bool)) withdrawn;
+    mapping(bytes32 => mapping(address => bool)) public withdrawn;
 
     event Withdrawn(bytes32 indexed user, address owner, address token, uint256 amount);
 
