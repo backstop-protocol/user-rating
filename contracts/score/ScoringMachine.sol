@@ -76,6 +76,10 @@ contract ScoringMachine is Ownable {
         return 0;
     }
 
+    function getCurrentBalance(bytes32 user, bytes32 asset) public view returns(uint balance) {
+        balance = userScore[user][asset].balance;
+    }
+
     // Math functions without errors
     // ==============================
     function add(uint x, uint y) internal pure returns (uint z) {
