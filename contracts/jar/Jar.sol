@@ -28,7 +28,13 @@ contract Jar is Exponential {
     // Connector contract address
     IConnector public connector; 
     // (cdp/user {bytes32} => token => isUserWithdrawn) maintain the withdrawn status
-    mapping(bytes32 => mapping(address => bool)) withdrawn;
+    mapping(bytes32 => mapping(address => bool)) public withdrawn;
+    // MakerDAO Vat address
+    address public vat;
+    // Supported ilks
+    bytes32[] public ilks;
+    // GemJoin corresponding to ilks
+    address[] public gemJoins;
 
     event Withdrawn(bytes32 indexed user, address owner, address token, uint256 amount);
 
@@ -54,13 +60,21 @@ contract Jar is Exponential {
     constructor(
         uint256 _roundId,
         uint256 _withdrawTimelock, 
-        address _connector
+        address _connector,
+        address _vat,
+        bytes32[] memory _ilks,
+        address[] memory _gemJoins
     ) public {
         require(_withdrawTimelock > now, "incorrect-withdraw-timelock");
+        require(_ilks.length == _gemJoins.length, "inconsistant-array-length");
 
         roundId = _roundId;
         withdrawTimelock = _withdrawTimelock;
         connector = IConnector(_connector);
+
+        vat = _vat;
+        ilks = _ilks;
+        gemJoins = _gemJoins;
     }
 
     /**
@@ -148,16 +162,25 @@ contract Jar is Exponential {
     // ===================
     
     /**
-     * @dev Delegate call to Connector contract to convert Maker gem to WETH
-     * @notice Function only be called after withdrawal is open, this is to prevent uneven 
-     *         distribution of WETH (from MakerDAO) rewards to the users
+     * @dev Exit the gems from mkr
+     * @notice Anyone is allowed to call this function
      */
-    function delegateEthExit() external {
-        (bool success,) = address(connector).delegatecall(abi.encodeWithSignature("ethExit()"));
-        require(success, "eth-exit-delegate-call-failed");
+    function gemExit() external {
+        for(uint i = 0; i < ilks.length; i++) {
+            uint wad = VatLike(vat).gem(ilks[i], address(this));
+            GemJoinLike(gemJoins[i]).exit(address(this), wad);
+        }
 
         if(_isWithdrawOpen()) ethExitCalled = true;
     }
+}
+
+interface VatLike {
+    function gem(bytes32 ilk, address user) external view returns(uint);
+}
+
+interface GemJoinLike {
+    function exit(address, uint) external;
 }
 
 /**
