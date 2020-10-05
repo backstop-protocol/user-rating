@@ -23,8 +23,8 @@ contract Jar is Exponential {
     uint256 public roundId;
     // Enable withdraw of rewards after timelock
     uint256 public withdrawTimelock;
-    // Is ETHExit called on MakerDAO?
-    bool public ethExitCalled = false;
+    // Is GemExit called on MakerDAO?
+    bool public gemExitCalled = false;
     // Connector contract address
     IConnector public connector; 
     // (cdp/user {bytes32} => token => isUserWithdrawn) maintain the withdrawn status
@@ -84,7 +84,7 @@ contract Jar is Exponential {
      * @param token Address of the token, which user is inteded to withdraw
      */
     function withdraw(bytes32 user, address token) external withdrawOpen {
-        require(ethExitCalled, "eth-exit-not-called-before");
+        require(gemExitCalled, "gem-exit-not-called-before");
 
         bool hasWithdrawn = withdrawn[user][token];
         require(! hasWithdrawn, "user-withdrew-rewards-before");
@@ -171,7 +171,7 @@ contract Jar is Exponential {
             GemJoinLike(gemJoins[i]).exit(address(this), wad);
         }
 
-        if(_isWithdrawOpen()) ethExitCalled = true;
+        if(_isWithdrawOpen()) gemExitCalled = true;
     }
 }
 
