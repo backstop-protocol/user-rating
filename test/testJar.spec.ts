@@ -31,12 +31,23 @@ contract("Jar", async (accounts) => {
   let jar: t.JarInstance;
   let connector: t.MockConnectorInstance;
 
+  const vat = ZERO_ADDRESS;
+  const ilks: Array<string> = new Array();
+  const gemJoins: Array<string> = new Array();
+
   beforeEach(async () => {
     connector = await MockConnector.new();
     const block = await web3.eth.getBlock(await web3.eth.getBlockNumber());
     const nowTimestamp = block.timestamp;
 
-    jar = await Jar.new(1, new BN(nowTimestamp).add(ONE_WEEK), connector.address);
+    jar = await Jar.new(
+      1,
+      new BN(nowTimestamp).add(ONE_WEEK),
+      connector.address,
+      vat,
+      ilks,
+      gemJoins,
+    );
   });
 
   it("should receive ETH at Jar", async () => {
@@ -48,7 +59,10 @@ contract("Jar", async (accounts) => {
   });
 
   it("should fail when withdrawTimeout is incorrect", async () => {
-    await expectRevert(Jar.new(1, 100, ZERO_ADDRESS), "incorrect-withdraw-timelock");
+    await expectRevert(
+      Jar.new(1, 100, ZERO_ADDRESS, vat, ilks, gemJoins),
+      "incorrect-withdraw-timelock",
+    );
   });
 
   context("withdraw()", async () => {
@@ -86,14 +100,14 @@ contract("Jar", async (accounts) => {
       await expectWithdrawn(user1, token.address, false);
     });
 
-    it("should fail withdraw when ethExit not called", async () => {
+    it("should fail withdraw when gemExit not called", async () => {
       //1. increase the time to enable withdrawal
       await time.increase(ONE_WEEK);
 
       //2. try to withdraw, must fail
       await expectRevert(
         jar.withdraw(user1, token.address, { from: user1 }),
-        "eth-exit-not-called-before",
+        "gem-exit-not-called-before",
       );
     });
 
@@ -101,8 +115,8 @@ contract("Jar", async (accounts) => {
       //1. increase block time
       await time.increase(ONE_WEEK);
 
-      //2. delegate ethExit
-      await jar.delegateEthExit();
+      //2. gemExit
+      await jar.gemExit();
 
       //3. user withdraw
       await jar.withdraw(user1, token.address, { from: user1 });
@@ -128,8 +142,8 @@ contract("Jar", async (accounts) => {
       //1. increase block time
       await time.increase(ONE_WEEK);
 
-      //2. delegate ethExit
-      await jar.delegateEthExit();
+      //2. gemExit
+      await jar.gemExit();
 
       //3. Expected balance
       await expectEtherBalance(jar.address, ether(TEN));
@@ -160,8 +174,8 @@ contract("Jar", async (accounts) => {
       //1. increase block time
       await time.increase(ONE_WEEK);
 
-      //2. delegate ethExit
-      await jar.delegateEthExit();
+      //2. gemExit
+      await jar.gemExit();
 
       //3. Expected balance
       await expectEtherBalance(jar.address, ether(TEN));
@@ -182,8 +196,8 @@ contract("Jar", async (accounts) => {
       //1. increase block time
       await time.increase(ONE_WEEK);
 
-      //2. delegate ethExit
-      await jar.delegateEthExit();
+      //2. gemExit
+      await jar.gemExit();
 
       //3. Expected balance
       await expectEtherBalance(jar.address, ether(TEN));
@@ -204,8 +218,8 @@ contract("Jar", async (accounts) => {
       //1. increase block time
       await time.increase(ONE_WEEK);
 
-      //2. delegate ethExit
-      await jar.delegateEthExit();
+      //2. gemExit
+      await jar.gemExit();
 
       //3. Expected balance
       await expectTokenBalance(jar.address, token, n2t_18(10));
@@ -225,8 +239,8 @@ contract("Jar", async (accounts) => {
       //1. increase block time
       await time.increase(ONE_WEEK);
 
-      //2. delegate ethExit
-      await jar.delegateEthExit();
+      //2. gemExit
+      await jar.gemExit();
 
       //3. Expected balance
       await expectTokenBalance(jar.address, token, n2t_18(10));
@@ -243,14 +257,25 @@ contract("Jar", async (accounts) => {
     });
   });
 
-  context("delegateEthExit()", async () => {
-    it("should succeed ethExit delegate call to connector");
+  context("gemExit()", async () => {
+    it("should not set gemExit status when called before withdrawTimeout", async () => {
+      //1. gemExit
+      await jar.gemExit();
 
-    it("should fail when connector address is incorrect");
+      const gemExitCalled = await jar.gemExitCalled();
+      expect(gemExitCalled).to.be.equal(false);
+    });
 
-    it("should not set ethExit status when called before withdrawTimeout");
+    it("should set gemExit status when called after withdrawTimeout", async () => {
+      //1. increase block time
+      await time.increase(ONE_WEEK);
 
-    it("should set ethExit status when called after withdrawTimeout");
+      //2. gemExit
+      await jar.gemExit();
+
+      const gemExitCalled = await jar.gemExitCalled();
+      expect(gemExitCalled).to.be.equal(true);
+    });
   });
 
   // Helper functions

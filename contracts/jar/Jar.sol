@@ -158,9 +158,6 @@ contract Jar is Exponential {
         return connector.toUser(user);
     }
 
-    // Delegate functions
-    // ===================
-
     /**
      * @dev Exit the gems from mkr
      * @notice Anyone is allowed to call this function
