@@ -35,7 +35,7 @@ contract ScoringMachine is Ownable {
             currentScore = 0;
         }
 
-        return add(currentScore, mul(score.balance, sub(time,last)));
+        return add(currentScore, mul(score.balance, sub(time, last)));
     }
 
     function addCheckpoint(bytes32 user, bytes32 asset) internal {
@@ -45,7 +45,7 @@ contract ScoringMachine is Ownable {
     function updateAssetScore(bytes32 user, bytes32 asset, int dbalance, uint time) internal {
         AssetScore storage score = userScore[user][asset];
 
-        if(score.last < start) addCheckpoint(user,asset);
+        if(score.last < start) addCheckpoint(user, asset);
 
         score.score = assetScore(score, time, start);
         score.balance = add(score.balance, dbalance);
@@ -54,12 +54,12 @@ contract ScoringMachine is Ownable {
     }
 
     function updateScore(bytes32 user, bytes32 asset, int dbalance, uint time) internal {
-        updateAssetScore(user,asset,dbalance,time);
-        updateAssetScore(GLOBAL_USER,asset,dbalance,time);
+        updateAssetScore(user, asset, dbalance, time);
+        updateAssetScore(GLOBAL_USER, asset, dbalance, time);
     }
 
     function getScore(bytes32 user, bytes32 asset, uint time, uint spinStart, uint checkPointHint) public view returns(uint score) {
-        if(time >= userScore[user][asset].last) return assetScore(userScore[user][asset],time,spinStart);
+        if(time >= userScore[user][asset].last) return assetScore(userScore[user][asset], time, spinStart);
 
         // else - check the checkpoints
         uint checkpointsLen = checkpoints[user][asset].length;
@@ -69,11 +69,15 @@ contract ScoringMachine is Ownable {
         if(checkpoints[user][asset][checkPointHint].last < time) checkPointHint = checkpointsLen - 1;
 
         for(uint i = checkPointHint ; ; i--){
-            if(checkpoints[user][asset][i].last <= time) return assetScore(checkpoints[user][asset][i],time,spinStart);
+            if(checkpoints[user][asset][i].last <= time) return assetScore(checkpoints[user][asset][i], time, spinStart);
         }
 
         // this supposed to be unreachable
         return 0;
+    }
+
+    function getCurrentBalance(bytes32 user, bytes32 asset) public view returns(uint balance) {
+        balance = userScore[user][asset].balance;
     }
 
     // Math functions without errors
