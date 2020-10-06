@@ -11,3 +11,8 @@ Compile the project
 Generate TypeChain typings
 
     npx buidler typechain
+
+Test
+
+    npx buidler test
+    

@@ -276,6 +276,11 @@ contract("Jar", async (accounts) => {
       const gemExitCalled = await jar.gemExitCalled();
       expect(gemExitCalled).to.be.equal(true);
     });
+
+    it("should perform gem exit from MakerDAO", async () => {
+      // NOTICE: THIS TEST IS THE PART OF dss-cdp-manager project
+      // NOTICE: WE CANNOT TEST THIS IN user-rating project
+    });
   });
 
   // Helper functions
