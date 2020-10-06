@@ -26,7 +26,7 @@ contract Jar is Exponential {
     // Is GemExit called on MakerDAO?
     bool public gemExitCalled = false;
     // Connector contract address
-    IConnector public connector; 
+    IConnector public connector;
     // (cdp/user {bytes32} => token => isUserWithdrawn) maintain the withdrawn status
     mapping(bytes32 => mapping(address => bool)) public withdrawn;
     // MakerDAO Vat address
@@ -59,7 +59,7 @@ contract Jar is Exponential {
      */
     constructor(
         uint256 _roundId,
-        uint256 _withdrawTimelock, 
+        uint256 _withdrawTimelock,
         address _connector,
         address _vat,
         bytes32[] memory _ilks,
@@ -158,9 +158,9 @@ contract Jar is Exponential {
         return connector.toUser(user);
     }
 
-    // Delegate functions 
+    // Delegate functions
     // ===================
-    
+
     /**
      * @dev Exit the gems from mkr
      * @notice Anyone is allowed to call this function
