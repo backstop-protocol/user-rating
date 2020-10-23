@@ -255,6 +255,56 @@ contract("Jar", async (accounts) => {
       await expectTokenBalance(user1, token, n2t_18(1));
       await expectWithdrawn(user1, token.address, true);
     });
+
+    it("should allow withdraw ERC20 based on user's share in total score", async () => {
+      //1. increase block time
+      await time.increase(ONE_WEEK);
+
+      //2. gemExit
+      await jar.gemExit();
+
+      //3. user1 withdraw
+      await jar.withdraw(user1, token.address, { from: user1 });
+
+      //4. check expected balance
+      await expectTokenBalance(jar.address, token, n2t_18(9));
+      await expectTokenBalance(user1, token, n2t_18(1));
+
+      //5. user2 withdraw
+      await jar.withdraw(user2, token.address, { from: user2 });
+
+      //6. check expected balance
+      await expectTokenBalance(jar.address, token, n2t_18(8));
+      await expectTokenBalance(user2, token, n2t_18(1));
+    });
+
+    it("should allow withdraw ETH based on user's share in total score", async () => {
+      //1. increase block time
+      await time.increase(ONE_WEEK);
+
+      //2. gemExit
+      await jar.gemExit();
+
+      //3. Expected balance
+      await expectEtherBalance(jar.address, ether(TEN));
+
+      const user1EthBal = await balance.current(user1);
+      expect(ZERO, user1EthBal);
+      const user2EthBal = await balance.current(user2);
+      expect(ZERO, user2EthBal);
+
+      //4. withdraw user1
+      let currBal = await balance.current(user1);
+      let tx = await jar.withdraw(user1, ETH_ADDRESS, { from: user1 });
+      await expectEtherBalance(jar.address, ether("9"));
+      await expectEtherBalanceAfterTx(user1, currBal.add(ether(ONE)), tx);
+
+      //4. withdraw user2
+      currBal = await balance.current(user2);
+      tx = await jar.withdraw(user2, ETH_ADDRESS, { from: user2 });
+      await expectEtherBalance(jar.address, ether("8"));
+      await expectEtherBalanceAfterTx(user2, currBal.add(ether(ONE)), tx);
+    });
   });
 
   context("gemExit()", async () => {
