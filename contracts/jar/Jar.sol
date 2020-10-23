@@ -29,6 +29,8 @@ contract Jar is Exponential {
     IConnector public connector; 
     // (cdp/user {bytes32} => token => isUserWithdrawn) maintain the withdrawn status
     mapping(bytes32 => mapping(address => bool)) public withdrawn;
+    // token => how much score was used
+    mapping(address => uint) public scoreWithdrawn;
     // MakerDAO Vat address
     address public vat;
     // Supported ilks
@@ -95,10 +97,11 @@ contract Jar is Exponential {
         uint256 userScore = _getUserScore(user);
         uint256 globalScore = _getGlobalScore();
 
-        uint256 amount = div_(mul_(userScore, totalBalance), globalScore);
+        uint256 amount = div_(mul_(userScore, totalBalance), sub_(globalScore, scoreWithdrawn[token]));
 
         // user withdrawn token from Jar
         withdrawn[user][token] = true;
+        scoreWithdrawn[token] = add_(scoreWithdrawn[token], userScore);
 
         // send amount to the owner of the CDP / user
         // Convert address to payable address
