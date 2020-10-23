@@ -18,6 +18,12 @@ jobs:
       - run:
           name: Compile contracts
           command: npx buidler compile
+      - run:
+          name: Generate TypeChain typings
+          command: npx buidler typechain
+      - run:
+          name: Run tests
+          command: npx buidler test
       - save_cache:
           key: dependency-cache-{{ checksum "package.json" }}
           paths:
