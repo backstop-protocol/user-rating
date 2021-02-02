@@ -68,8 +68,8 @@ contract CompoundJar is Exponential {
 
         uint256 totalBalance = IERC20(cToken).balanceOf(address(this));
 
-        uint256 userScore = _getUserScore(user, cToken);
-        uint256 globalScore = _getGlobalScore(cToken);
+        uint256 userScore = connector.getUserScore(user);
+        uint256 globalScore = connector.getGlobalScore();
 
         uint256 amount = div_(mul_(userScore, totalBalance), sub_(globalScore, scoreWithdrawn[cToken]));
 
@@ -88,22 +88,12 @@ contract CompoundJar is Exponential {
     function _isWithdrawOpen() internal view returns (bool) {
         return now > withdrawTimelock;
     }
-
-    // Connector function calls
-    // =========================
-    function _getUserScore(address user, address cToken) internal view returns (uint256) {
-        return connector.getUserScore(user, cToken);
-    }
-
-    function _getGlobalScore(address cToken) internal view returns (uint256) {
-        return connector.getGlobalScore(cToken);
-    }
 }
 
 /**
  * @title Connection interface to connect to MakerDAO / Compound
  */
 interface IConnector {
-    function getUserScore(address user, address cToken) external view returns (uint256);
-    function getGlobalScore(address cToken) external view returns (uint256);
+    function getUserScore(address user) external view returns (uint256);
+    function getGlobalScore() external view returns (uint256);
 }
