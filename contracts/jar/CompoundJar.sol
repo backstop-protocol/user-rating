@@ -17,8 +17,6 @@ contract CompoundJar is Exponential {
 
     using SafeERC20 for IERC20;
 
-    // Round ID of the rewards distribution
-    uint256 public roundId;
     // Enable withdraw of rewards after timelock
     uint256 public withdrawTimelock;
     // Connector contract address
@@ -40,18 +38,15 @@ contract CompoundJar is Exponential {
 
     /**
      * @dev Constructor
-     * @param _roundId Round-id for which rewards are collected in this contract
      * @param _withdrawTimelock Withdraw timelock time in future
      * @param _connector Connector contract address
      */
     constructor(
-        uint256 _roundId,
         uint256 _withdrawTimelock,
         address _connector
     ) public {
         require(_withdrawTimelock > now, "incorrect-withdraw-timelock");
 
-        roundId = _roundId;
         withdrawTimelock = _withdrawTimelock;
         connector = IConnector(_connector);
     }
