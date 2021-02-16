@@ -39,15 +39,15 @@ contract CompoundJar is Exponential {
     /**
      * @dev Constructor
      * @param _withdrawTimelock Withdraw timelock time in future
-     * @param _connector Connector contract address
      */
-    constructor(
-        uint256 _withdrawTimelock,
-        address _connector
-    ) public {
+    constructor(uint256 _withdrawTimelock) public {
         require(_withdrawTimelock > now, "incorrect-withdraw-timelock");
 
         withdrawTimelock = _withdrawTimelock;
+    }
+
+    function setConnector(address _connector) external {
+        require(connector == IConnector(0), "connector-already-set");
         connector = IConnector(_connector);
     }
 
