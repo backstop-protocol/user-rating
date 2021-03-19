@@ -31,10 +31,14 @@ contract ScoringMachine is Ownable {
         start = now;
     }
 
-    function getLatestScoreIndex(bytes32 user, bytes32 asset) internal view returns(uint latest, uint[3] last) {
-        uint last0 = userScore[user][asset][0].last;
-        uint last1 = userScore[user][asset][1].last;
-        uint last2 = userScore[user][asset][2].last;
+    function getLatestScoreIndex(
+        bytes32 user,
+        bytes32 asset
+    ) internal view returns(uint latest, uint[3] memory last) {
+        User memory user = userScore[user][asset];
+        uint last0 = user.scores[0].last;
+        uint last1 = user.scores[1].last;
+        uint last2 = user.scores[2].last;
 
         last[0] = last0; last[1] = last1; last[2] = last2;
 
@@ -44,7 +48,7 @@ contract ScoringMachine is Ownable {
     }
 
     function updateAssetScore(bytes32 user, bytes32 asset, int dbalance) internal {
-        (uint latest, uint[3] last) = getLatestScoreIndex(user, asset);
+        (uint latest, uint[3] memory last) = getLatestScoreIndex(user, asset);
         uint time = now;
 
         uint dtime = sub(time, last[latest] == 0 ? start : last[latest]);
@@ -52,25 +56,25 @@ contract ScoringMachine is Ownable {
             latest = (latest + 1) % 3;
         }
         
-        AssetScore storage score = userScore[user][asset][latest];
+        AssetScore storage score = userScore[user][asset].scores[latest];
 
-        score.score = add(score.score, mul(score.balance, dtime));
-        score.balance = add(score.balance, dbalance);
+        score.score = uint112(add(score.score, mul(score.balance, dtime)));
+        score.balance = uint112(add(score.balance, dbalance));
         
-        score.last = time;
+        score.last = uint32(time);
     }
 
-    function slashAssetScore(byte32 user, bytes32 asset, int dbalance) internal {
-        (uint latest, uint[3] last) = getLatestScoreIndex(user, asset);
+    function slashAssetScore(bytes32 user, bytes32 asset, int dbalance) internal {
+        (uint latest, uint[3] memory last) = getLatestScoreIndex(user, asset);
         uint time = now;
         
-        for(uint i = 0 ; i < 2 ; i++) {
+        for(uint i = 0 ; i < 3 ; i++) {
             uint index = (latest + 2 + i) % 3;
-            AssetScore storage score = userScore[user][asset][index];
-            score.balance = add(score.balance, dbalance);
+            AssetScore storage score = userScore[user][asset].scores[index];
+            score.balance = uint112(add(score.balance, dbalance));
             
             if(add(last[index], 2 * EPOCH) >= time) {
-                score.score = add(score.score, -mul(uint(-1 * dbalance), EPOCH));
+                score.score = uint112(add(score.score, -mul(uint(dbalance), EPOCH)));
             }
         }
     }
@@ -86,20 +90,21 @@ contract ScoringMachine is Ownable {
     }    
 
     function getScore(bytes32 user, bytes32 asset, uint time) public view returns(uint score) {
-        (uint latest, uint[3] last) = getLatestScoreIndex(user, asset);
+        (uint latest, uint[3] memory last) = getLatestScoreIndex(user, asset);
+        uint index = 0;
         for(uint i = 0 ; i < 3 ; i++) {
-            uint index = (latest + i) % 3;
+            index = (latest + i) % 3;
             if(add(last[index], EPOCH) >= time) break;
         }
 
-        AssetScore storage score = userScore[user][asset][index];
-        uint dtime = sub(time, latest[index]);
+        AssetScore storage score = userScore[user][asset].scores[index];
+        uint dtime = sub(time, last[index]);
         return add(score.score, mul(score.balance, dtime));
     }
 
     function getCurrentBalance(bytes32 user, bytes32 asset) public view returns(uint balance) {
         (uint latest,) = getLatestScoreIndex(user, asset);
-        balance = userScore[user][asset][latest].balance;
+        balance = userScore[user][asset].scores[latest].balance;
     }
 
     // Math functions without errors
@@ -137,7 +142,7 @@ contract ScoringMachine is Ownable {
 }
 
 contract ClaimMachine is ScoringMachine {
-    bytes32 constant public INDEX_USER = bytes32(0x1);
+    bytes32 constant public INDEX_USER = bytes32(uint(0x1));
 
     struct UserIndex {
         uint112 lastIndex;
@@ -162,7 +167,7 @@ contract ClaimMachine is ScoringMachine {
         UserIndex storage index = userIndex[user][asset];
         uint claimAmount = mul(userScore, mul(sub(globalIndex, index.lastIndex), sub(time, index.lastClaimTime))) / totalScore;
 
-        index.lastIndex = globalIndex;
-        lastClaimTime = time;
+        index.lastIndex = uint112(globalIndex);
+        index.lastClaimTime = uint32(time);
     }
 }
