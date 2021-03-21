@@ -24,21 +24,21 @@ contract ScoringMachine is Ownable {
 
     bytes32 constant public GLOBAL_USER = bytes32(0x0);
 
-    uint public start; // start time of the campaign;
-    uint constant public EPOCH = 1 days; // TODO - decide
+    uint32 public start; // start time of the campaign;
+    uint32 constant public EPOCH = 1 days; // TODO - decide
 
     function spin() external onlyOwner { // start a new round
-        start = now;
+        start = uint32(now);
     }
 
     function getLatestScoreIndex(
         bytes32 user,
         bytes32 asset
-    ) internal view returns(uint latest, uint[3] memory last) {
-        User memory user = userScore[user][asset];
-        uint last0 = user.scores[0].last;
-        uint last1 = user.scores[1].last;
-        uint last2 = user.scores[2].last;
+    ) internal view returns(uint latest, uint32[3] memory last) {
+        User memory userData = userScore[user][asset];
+        uint32 last0 = userData.scores[0].last;
+        uint32 last1 = userData.scores[1].last;
+        uint32 last2 = userData.scores[2].last;
 
         last[0] = last0; last[1] = last1; last[2] = last2;
 
@@ -47,11 +47,11 @@ contract ScoringMachine is Ownable {
         else latest = 2;
     }
 
-    function updateAssetScore(bytes32 user, bytes32 asset, int dbalance) internal {
-        (uint latest, uint[3] memory last) = getLatestScoreIndex(user, asset);
-        uint time = now;
+    function updateAssetScore(bytes32 user, bytes32 asset, int112 dbalance) internal {
+        (uint latest, uint32[3] memory last) = getLatestScoreIndex(user, asset);
+        uint112 time = uint112(now);
 
-        uint dtime = sub(time, last[latest] == 0 ? start : last[latest]);
+        uint112 dtime = sub(time, last[latest] == 0 ? start : last[latest]);
         if(dtime >= EPOCH) {
             latest = (latest + 1) % 3;
         }
@@ -64,74 +64,91 @@ contract ScoringMachine is Ownable {
         score.last = uint32(time);
     }
 
-    function slashAssetScore(bytes32 user, bytes32 asset, int dbalance) internal {
-        (uint latest, uint[3] memory last) = getLatestScoreIndex(user, asset);
-        uint time = now;
-        
-        for(uint i = 0 ; i < 3 ; i++) {
+    function slashAssetScore(bytes32 user, bytes32 asset, int112 dbalance) internal {
+        // make sure there is a record current time, that is slashable
+        updateAssetScore(user, asset, 0);
+
+        (uint latest, uint32[3] memory last) = getLatestScoreIndex(user, asset);
+        uint32 time = uint32(now);
+
+        for(uint i = 0 ; i < 2 ; i++) {
             uint index = (latest + 2 + i) % 3;
+
+            if(add32(last[index], 2 * EPOCH) < time) continue;
+
             AssetScore storage score = userScore[user][asset].scores[index];
             score.balance = uint112(add(score.balance, dbalance));
-            
-            if(add(last[index], 2 * EPOCH) >= time) {
-                score.score = uint112(add(score.score, -mul(uint(dbalance), EPOCH)));
-            }
+            score.score = uint112(add(score.score, -mul(uint112(-dbalance), EPOCH)));
         }
     }
 
-    function updateScore(bytes32 user, bytes32 asset, int dbalance) internal {
+    function updateScore(bytes32 user, bytes32 asset, int112 dbalance) internal {
         updateAssetScore(user, asset, dbalance);
         updateAssetScore(GLOBAL_USER, asset, dbalance);
     }
 
-    function slashScore(bytes32 user, bytes32 asset, int dbalance) internal {
+    function slashScore(bytes32 user, bytes32 asset, int112 dbalance) internal {
         slashAssetScore(user, asset, dbalance);
         slashAssetScore(GLOBAL_USER, asset, dbalance);
     }    
 
-    function getScore(bytes32 user, bytes32 asset, uint time) public view returns(uint score) {
-        (uint latest, uint[3] memory last) = getLatestScoreIndex(user, asset);
+    function getScore(bytes32 user, bytes32 asset, uint32 time) public view returns(uint112 score) {
+        (uint latest, uint32[3] memory last) = getLatestScoreIndex(user, asset);
         uint index = 0;
         for(uint i = 0 ; i < 3 ; i++) {
             index = (latest + i) % 3;
-            if(add(last[index], EPOCH) >= time) break;
+            if(add32(last[index], EPOCH) >= time) break;
         }
 
-        AssetScore storage score = userScore[user][asset].scores[index];
-        uint dtime = sub(time, last[index]);
-        return add(score.score, mul(score.balance, dtime));
+        AssetScore storage currScore = userScore[user][asset].scores[index];
+        uint32 dtime = sub32(time, last[index]);
+        return add(currScore.score, mul(currScore.balance, dtime));
     }
 
-    function getCurrentBalance(bytes32 user, bytes32 asset) public view returns(uint balance) {
+    function getCurrentBalance(bytes32 user, bytes32 asset) public view returns(uint112 balance) {
         (uint latest,) = getLatestScoreIndex(user, asset);
         balance = userScore[user][asset].scores[latest].balance;
     }
 
     // Math functions without errors
     // ==============================
-    function add(uint x, uint y) internal pure returns (uint z) {
+    function add(uint112 x, uint112 y) internal pure returns (uint112 z) {
         z = x + y;
         if(!(z >= x)) return 0;
 
         return z;
     }
 
-    function add(uint x, int y) internal pure returns (uint z) {
-        z = x + uint(y);
+    function add(uint112 x, int112 y) internal pure returns (uint112 z) {
+        z = x + uint112(y);
         if(!(y >= 0 || z <= x)) return 0;
         if(!(y <= 0 || z >= x)) return 0;
 
         return z;
     }
 
-    function sub(uint x, uint y) internal pure returns (uint z) {
+    function add32(uint32 x, uint32 y) internal pure returns (uint32 z) {
+        z = x + y;
+        if(!(z >= x)) return 0;
+
+        return z;
+    }
+
+    function sub(uint112 x, uint112 y) internal pure returns (uint112 z) {
         if(!(y <= x)) return 0;
         z = x - y;
 
         return z;
     }
 
-    function mul(uint x, uint y) internal pure returns (uint z) {
+    function sub32(uint32 x, uint32 y) internal pure returns (uint32 z) {
+        if(!(y <= x)) return 0;
+        z = x - y;
+
+        return z;
+    }    
+
+    function mul(uint112 x, uint112 y) internal pure returns (uint112 z) {
         if (x == 0) return 0;
 
         z = x * y;
@@ -142,32 +159,42 @@ contract ScoringMachine is Ownable {
 }
 
 contract ClaimMachine is ScoringMachine {
-    bytes32 constant public INDEX_USER = bytes32(uint(0x1));
+    bytes32 constant public GOV_USER = bytes32(uint(0x1));
 
-    struct UserIndex {
-        uint112 lastIndex;
-        uint32  lastClaimTime;
+    struct UserClaimInfo {
+        uint112 scoreClaimed;
     }
 
-    // user => asset > UserIndex
-    mapping(bytes32 => mapping(bytes32 => UserIndex)) userIndex;
+    struct ClaimInfo {
+        uint112 globalScoreClaimed;
+        uint112 govClaimed;
 
-    function adjustSpeed(bytes32 asset, int dspeed) internal {
-        updateScore(INDEX_USER, asset, dspeed);
+        // user => user claim info
+        mapping(bytes32 => UserClaimInfo) userInfo;
     }
 
-    function claim(bytes32 user, bytes32 asset) internal returns(uint claimAmount) {
-        uint time = now % EPOCH - EPOCH;
+    // asset => claimInfo
+    mapping(bytes32 => ClaimInfo) claimInfo;
 
-        uint totalScore = getScore(GLOBAL_USER, asset, time);
-        uint userScore = getScore(user, asset, time);
+    function adjustSpeed(bytes32 asset, int112 dspeed) internal {
+        updateScore(GOV_USER, asset, dspeed);
+    }
 
-        uint globalIndex = getScore(INDEX_USER, asset, time);
+    function claim(bytes32 user, bytes32 asset) internal returns(uint112 claimAmount) {
+        uint32 time = uint32(now % EPOCH - EPOCH);
 
-        UserIndex storage index = userIndex[user][asset];
-        uint claimAmount = mul(userScore, mul(sub(globalIndex, index.lastIndex), sub(time, index.lastClaimTime))) / totalScore;
+        uint112 totalScore = getScore(GLOBAL_USER, asset, time);
+        uint112 userScore = getScore(user, asset, time);
+        uint112 totalGov = getScore(GOV_USER, asset, time);
 
-        index.lastIndex = uint112(globalIndex);
-        index.lastClaimTime = uint32(time);
+        uint112 globalScoreClaimed = claimInfo[asset].globalScoreClaimed;
+        uint112 totalGovClaimed = claimInfo[asset].govClaimed;
+        uint112 userScoreClaimed = claimInfo[asset].userInfo[user].scoreClaimed;
+
+        claimAmount = mul(sub(userScore, userScoreClaimed), sub(totalGov, totalGovClaimed)) / sub(totalScore, globalScoreClaimed);
+
+        claimInfo[asset].globalScoreClaimed = add(claimInfo[asset].globalScoreClaimed , userScore);
+        claimInfo[asset].userInfo[user].scoreClaimed = add(claimInfo[asset].userInfo[user].scoreClaimed, userScore);        
+        claimInfo[asset].govClaimed = add(claimInfo[asset].govClaimed, claimAmount);
     }
 }
