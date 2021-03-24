@@ -47,34 +47,46 @@ contract ScoringMachine is Ownable {
         else latest = 2;
     }
 
-    function updateAssetScore(bytes32 user, bytes32 asset, int112 dbalance) internal {
-        (uint latest, uint32[3] memory last) = getLatestScoreIndex(user, asset);
-        uint112 time = uint112(now);
+    function inEpoch(uint32 t0, uint32 t1) internal pure returns(bool) {
+        uint32 t0Epoch = (t0 / EPOCH) * EPOCH;
+        return add32(t0Epoch, EPOCH) > t1;
+    }
 
-        uint112 dtime = sub(time, last[latest] == 0 ? start : last[latest]);
-        if(dtime >= EPOCH) {
+    function inPrevEpoch(uint32 t0, uint32 t1) internal pure returns(bool) {
+        return inEpoch(add32(t0, EPOCH), t1);
+    }
+
+    function updateAssetScore(bytes32 user, bytes32 asset, int112 dbalance, uint32 time) internal {
+        (uint latest, uint32[3] memory last) = getLatestScoreIndex(user, asset);
+        uint32 t0 = last[latest] == 0 ? start : last[latest];
+
+        AssetScore storage score = userScore[user][asset].scores[latest];
+        uint112 scoreBefore = score.score;
+        uint112 balanceBefore = score.balance;
+
+        uint32 dtime = sub32(time, t0);
+        if(! inEpoch(t0, time)) {
             latest = (latest + 1) % 3;
         }
         
-        AssetScore storage score = userScore[user][asset].scores[latest];
+        score = userScore[user][asset].scores[latest];
 
-        score.score = uint112(add(score.score, mul(score.balance, dtime)));
-        score.balance = uint112(add(score.balance, dbalance));
+        score.score = uint112(add(scoreBefore, mul(balanceBefore, dtime)));
+        score.balance = uint112(add(balanceBefore, dbalance));
         
         score.last = uint32(time);
     }
 
-    function slashAssetScore(bytes32 user, bytes32 asset, int112 dbalance) internal {
+    function slashAssetScore(bytes32 user, bytes32 asset, int112 dbalance, uint32 time) internal {
         // make sure there is a record current time, that is slashable
-        updateAssetScore(user, asset, 0);
+        updateAssetScore(user, asset, 0, time);
 
         (uint latest, uint32[3] memory last) = getLatestScoreIndex(user, asset);
-        uint32 time = uint32(now);
 
         for(uint i = 0 ; i < 2 ; i++) {
             uint index = (latest + 2 + i) % 3;
 
-            if(add32(last[index], 2 * EPOCH) < time) continue;
+            if(! (inEpoch(last[index], time) || inPrevEpoch(last[index], time))) continue;
 
             AssetScore storage score = userScore[user][asset].scores[index];
             score.balance = uint112(add(score.balance, dbalance));
@@ -82,27 +94,31 @@ contract ScoringMachine is Ownable {
         }
     }
 
-    function updateScore(bytes32 user, bytes32 asset, int112 dbalance) internal {
-        updateAssetScore(user, asset, dbalance);
-        updateAssetScore(GLOBAL_USER, asset, dbalance);
+    function updateScore(bytes32 user, bytes32 asset, int112 dbalance, uint32 time) internal {
+        updateAssetScore(user, asset, dbalance, time);
+        updateAssetScore(GLOBAL_USER, asset, dbalance, time);
     }
 
-    function slashScore(bytes32 user, bytes32 asset, int112 dbalance) internal {
-        slashAssetScore(user, asset, dbalance);
-        slashAssetScore(GLOBAL_USER, asset, dbalance);
+    function slashScore(bytes32 user, bytes32 asset, int112 dbalance, uint32 time) internal {
+        slashAssetScore(user, asset, dbalance, time);
+        slashAssetScore(GLOBAL_USER, asset, dbalance, time);
     }    
 
     function getScore(bytes32 user, bytes32 asset, uint32 time) public view returns(uint112 score) {
         (uint latest, uint32[3] memory last) = getLatestScoreIndex(user, asset);
         uint index = 0;
         for(uint i = 0 ; i < 3 ; i++) {
-            index = (latest + i) % 3;
-            if(add32(last[index], EPOCH) >= time) break;
+            index = (latest + 1 + i) % 3;
+            if(inEpoch(last[index], time)) break;
         }
 
         AssetScore storage currScore = userScore[user][asset].scores[index];
         uint32 dtime = sub32(time, last[index]);
         return add(currScore.score, mul(currScore.balance, dtime));
+    }
+
+    function getGlobalScore(bytes32 asset, uint32 time) public view returns(uint112 score) {
+        return getScore(GLOBAL_USER, asset, time);
     }
 
     function getCurrentBalance(bytes32 user, bytes32 asset) public view returns(uint112 balance) {
@@ -176,16 +192,20 @@ contract ClaimMachine is ScoringMachine {
     // asset => claimInfo
     mapping(bytes32 => ClaimInfo) claimInfo;
 
-    function adjustSpeed(bytes32 asset, int112 dspeed) internal {
-        updateScore(GOV_USER, asset, dspeed);
+    function adjustSpeed(bytes32 asset, int112 dspeed, uint32 time) internal {
+        updateScore(GOV_USER, asset, dspeed, time);
+    }
+
+    function getGovScore(bytes32 asset, uint32 time) public view returns(uint112 score) {
+        return getScore(GOV_USER, asset, time);
     }
 
     function claim(bytes32 user, bytes32 asset) internal returns(uint112 claimAmount) {
         uint32 time = uint32(now % EPOCH - EPOCH);
 
-        uint112 totalScore = getScore(GLOBAL_USER, asset, time);
+        uint112 totalScore = getGlobalScore(asset, time);
         uint112 userScore = getScore(user, asset, time);
-        uint112 totalGov = getScore(GOV_USER, asset, time);
+        uint112 totalGov = getGovScore(asset, time);
 
         uint112 globalScoreClaimed = claimInfo[asset].globalScoreClaimed;
         uint112 totalGovClaimed = claimInfo[asset].govClaimed;
