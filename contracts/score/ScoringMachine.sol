@@ -89,8 +89,8 @@ contract ScoringMachine is Ownable {
             if(! (inEpoch(last[index], time) || inPrevEpoch(last[index], time))) continue;
 
             AssetScore storage score = userScore[user][asset].scores[index];
-            score.balance = uint112(add(score.balance, dbalance));
-            score.score = uint112(add(score.score, -mul(uint112(-dbalance), EPOCH)));
+            score.balance = add(score.balance, dbalance);
+            score.score = add(score.score, -mul(uint112(-dbalance), EPOCH));
         }
     }
 
