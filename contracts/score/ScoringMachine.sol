@@ -224,7 +224,7 @@ contract ClaimMachine is ScoringMachine {
     }
 
     function claim(bytes32 user, bytes32 asset) internal returns(uint96 claimAmount) {
-        uint32 time = uint32(now % EPOCH - EPOCH);
+        uint32 time = uint32((now / EPOCH) * EPOCH - EPOCH);
 
         uint96 totalScore = getGlobalScore(asset, time);
         uint96 userScore = getScore(user, asset, time);
