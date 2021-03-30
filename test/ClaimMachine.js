@@ -189,6 +189,101 @@ contract("ScoreMachine", accounts => {
     assert(close(score1, 12000 * 100 * 1e10 / 2 + 2 * 12000 * 100 * 1e10 / 3), "unexpected score1 " + score1.toString())    
     assert(close(score0, 12000 * 100 * 1e10 / 2 + 1 * 12000 * 100 * 1e10 / 3), "unexpected score0 " + score0.toString())
     
+  })
+  
+  it("check two users with two assets", async function() {
+    let block = startBlock + 123
+
+    await scoreMachine.updateScoreMock(user0, asset0, 1000, 1000, block)
+    await scoreMachine.updateScoreMock(user1, asset0, 2000, 2000, block)
+
+    await scoreMachine.updateScoreMock(user0, asset1, 2000, 2000, block)
+    await scoreMachine.updateScoreMock(user1, asset1, 1000, 1000, block)    
+
+    block += 100
+
+    let score00 = await scoreMachine.getScore(user0, asset0, block)
+    let score10 = await scoreMachine.getScore(user1, asset0, block)
+
+    let score01 = await scoreMachine.getScore(user0, asset1, block)
+    let score11 = await scoreMachine.getScore(user1, asset1, block)    
+
+    assert(close(score00, 1 * 12000 * 100 * 1e10 / 3), "unexpected score00 " + score00.toString())
+    assert(close(score10, 2 * 12000 * 100 * 1e10 / 3), "unexpected score10 " + score10.toString())
+
+    assert(close(score01, parseInt(2 * 1100 * 100 * 1e10 / 3)), "unexpected score01 " + score01.toString())
+    assert(close(score11, parseInt(1 * 1100 * 100 * 1e10 / 3)), "unexpected score11 " + score11.toString())
+  })
+  
+  it("check two users with speed change", async function() {
+    let block = startBlock + 123
+
+    await scoreMachine.updateScoreMock(user0, asset0, 1000, 1000, block)
+    await scoreMachine.updateScoreMock(user1, asset0, 2000, 2000, block)
+        
+    block += 100
+
+    //console.log((await scoreMachine.getScore(user1, asset0, block)).toString())
+
+    await scoreMachine.updateScoreMock(user0, asset0, -500, 500, block)
+    await scoreMachine.updateScoreMock(user1, asset0, 2000, 4000, block)    
+
+    await scoreMachine.setSpeedMock(asset0, 1, 1000, block)
+
+    block += 100
+
+    const score0 = await scoreMachine.getScore(user0, asset0, block)
+    const score1 = await scoreMachine.getScore(user1, asset0, block)
+
+    assert(close(score0, 1 * 12000 * 100 * 1e10 / 3 + 1 * 1000 * 100 * 1e10 / 9), "unexpected score0 " + score0.toString())    
+    assert(close(score1, 2 * 12000 * 100 * 1e10 / 3 + 8 * 1000 * 100 * 1e10 / 9), "unexpected score1 " + score1.toString())    
+  })
+  
+  it("slash during an operation", async function() {
+    let block = startBlock + 123
+
+    await scoreMachine.updateScoreMock(user0, asset0, 1000, 1000, block)
+    await scoreMachine.updateScoreMock(user1, asset0, 2000, 2000, block)
+        
+    block += 100
+
+    // user withdrawed 500, but his balance is 100 short than it should be, so need to slash 100.
+    await scoreMachine.updateScoreMock(user0, asset0, -500, 400, block)    
+    const balance = await scoreMachine.getCurrentBalance(user0, asset0)
+    assert.equal(balance.toString(), "400", "unexpected balance")
+
+    // last update didn't kick in
+    let score0 = await scoreMachine.getScore(user0, asset0, block)
+    let score1 = await scoreMachine.getScore(user1, asset0, block)
+
+    assert(close(score0,  900 * 12000 * 100 * 1e10 / 2900), "unexpected score0")
+    assert(close(score1, 2000 * 12000 * 100 * 1e10 / 2900), "unexpected score1")
+
+    block += 100
+
+    const score0post = await scoreMachine.getScore(user0, asset0, block)
+    const score1post = await scoreMachine.getScore(user1, asset0, block)
+
+    assert(close(score0post,  900 * 12000 * 100 * 1e10 / 2900 +  400 * 12000 * 100 * 1e10 / 2400), "unexpected score0post " + score0post.toString())
+    assert(close(score1post, 2000 * 12000 * 100 * 1e10 / 2900 + 2000 * 12000 * 100 * 1e10 / 2400), "unexpected score1post " + score1post.toString())
+  })
+
+  it("join via non 0 operation", async function() {
+    let block = startBlock + 123
+
+    await scoreMachine.updateScoreMock(user0, asset0, 1000, 1000, block)
+        
+    block += 100
+
+    await scoreMachine.updateScoreMock(user1, asset0, 20, 2000, block)
+
+    block += 100
+
+    const score0 = await scoreMachine.getScore(user0, asset0, block)
+    const score1 = await scoreMachine.getScore(user1, asset0, block)
+
+    assert(close(score0,  12000 * 100 * 1e10 + 1 * 12000 * 100 * 1e10 / 3), "unexpected score0 " + score0.toString())
+    assert(close(score1,  0                  + 2 * 12000 * 100 * 1e10 / 3), "unexpected score1 " + score1.toString())
   })  
 })
 
