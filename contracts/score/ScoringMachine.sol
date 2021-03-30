@@ -30,10 +30,10 @@ contract ScoringMachine is Ownable {
     }
 
     struct DistributionData {
-        uint speed;
-        uint scoreNormFactor;
-        uint lastSpeedUpdateBlock;
-        uint totalDistributed;
+        uint64 speed;
+        uint96 scoreNormFactor;
+        uint32 lastSpeedUpdateBlock;
+        uint96 totalDistributed;
 
         // how much each user already claimed
         mapping(bytes32 => uint) claimed;
@@ -71,25 +71,19 @@ contract ScoringMachine is Ownable {
         totalDistributed = data.totalDistributed;
     }
 
-    function setSpeed(bytes32 asset, uint speed, uint scoreNormFactor, uint blockNumber) internal {
-        require(blockNumber <= uint32(-1), "setSpeed: blockNumber-overflow");
+    function setSpeed(bytes32 asset, uint64 speed, uint96 scoreNormFactor, uint32 blockNumber) internal {
         updateAssetScore(bytes32(0), asset, 0, 0, uint32(blockNumber));
 
-        require(speed <= uint64(-1), "setSpeed: speed-overflow");        
-        assetData[asset].globalData.speed = uint64(speed);
+        assetData[asset].globalData.speed = speed;
 
         DistributionData storage data = assetDistributionData[asset];
 
         require(blockNumber >= data.lastSpeedUpdateBlock, "setSpeed: blockNumber-overflow");
-        uint newlyDistributed = (blockNumber - data.lastSpeedUpdateBlock) * data.speed;
-        require(newlyDistributed <= uint128(-1),"setSpeed: newly-distributed-overflow");
-
-        require(data.totalDistributed <= uint128(-1), "setSpeed: totalDistributed overflow");
-        data.totalDistributed += newlyDistributed;
+        uint96 newlyDistributed = mulmulmuldiv(uint64(data.speed), INDEX_FACTOR, sub32(blockNumber, data.lastSpeedUpdateBlock), 1);
+        data.totalDistributed = add96(data.totalDistributed, newlyDistributed);
         data.speed = speed;
         data.lastSpeedUpdateBlock = blockNumber;
 
-        require(scoreNormFactor <= uint96(-1), "setSpeed: scoreNormFactor-overflow");
         data.scoreNormFactor = scoreNormFactor;
     }
 
@@ -150,18 +144,13 @@ contract ScoringMachine is Ownable {
 
     function getGlobalScore(bytes32 asset, uint32 blockNumber) public view returns(uint96 score) {
         DistributionData storage data = assetDistributionData[asset];
-        require(data.totalDistributed <= uint96(-1), "getGlobalScore: totalDistributed-overflow");
         require(blockNumber >= data.lastSpeedUpdateBlock, "getGlobalScore: blockNumber-overflow");
-        require(data.speed <= uint64(-1), "getGlobalScore: speed-overflow");
 
-        uint globalScore = data.totalDistributed + (blockNumber - data.lastSpeedUpdateBlock) * data.speed;
+        uint96 newDist = mulmulmuldiv(data.speed, INDEX_FACTOR, sub32(blockNumber, data.lastSpeedUpdateBlock), 1);
+
+        uint96 globalScore = add96(data.totalDistributed, newDist);
         
-        require(data.scoreNormFactor <= uint128(-1), "getGlobalScore: scoreNormFactor-overflow");
-        require(globalScore <= uint128(-1), "getGlobalScore: globalScore-overflow");
-
-        uint result = data.scoreNormFactor * globalScore;
-        require(result <= uint96(-1), "getGlobalScore: score-overflow");
-        score = uint96(result);
+        score = mul96(data.scoreNormFactor, globalScore);
     }
 
     function getCurrentBalance(bytes32 user, bytes32 asset) public view returns(uint96 balance) {

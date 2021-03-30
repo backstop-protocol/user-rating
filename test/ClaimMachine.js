@@ -146,6 +146,21 @@ contract("ScoreMachine", accounts => {
 
     collectedScore = await scoreMachine.claimScoreMock.call(user0, asset0, 1000, block)
     assert.equal(collectedScore.toString(), "0", "unexpected collected score")        
+  })
+  
+  it("check total score", async function() {
+    await scoreMachine.updateScoreMock(user0, asset0, 1000, 1000, startBlock)
+    await scoreMachine.updateScoreMock(user1, asset0, 2000, 2000, startBlock)
+
+    // 13k coins per block for asset 0
+    await scoreMachine.setSpeedMock(asset0, 13, 1000, startBlock + 2)
+    // 14k coins per block for asset 0
+    await scoreMachine.setSpeedMock(asset0, 14, 1000, startBlock + 5)
+
+    const totalScore = await scoreMachine.getGlobalScore(asset0, startBlock + 15)
+    const expectedTotalScore = (12 * 2 + 13 * 3 + 14 * 10) * 1000 * 1e10
+
+    assert.equal(totalScore.toString(), expectedTotalScore.toString(), "unexpected total score")
   })  
 })
 

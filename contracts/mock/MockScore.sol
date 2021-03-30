@@ -4,7 +4,7 @@ pragma solidity 0.5.16;
 import { ScoringMachine } from "../score/ScoringMachine.sol";
 
 contract MockScoreMachine is ScoringMachine {
-    function setSpeedMock(bytes32 asset, uint speed, uint scoreNormFactor, uint blockNumber) public {
+    function setSpeedMock(bytes32 asset, uint64 speed, uint96 scoreNormFactor, uint32 blockNumber) public {
         super.setSpeed(asset, speed, scoreNormFactor, blockNumber);
     }
 
