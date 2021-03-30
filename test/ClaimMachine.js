@@ -1,8 +1,7 @@
-const ClaimMachine = artifacts.require("MockScoreMachine");
+const ScoreMachine = artifacts.require("MockScoreMachine");
 
 
-let claimMachine
-let epoch
+let scoreMachine
 const user0 = web3.utils.keccak256("ani")
 const user1 = web3.utils.keccak256("ata")
 const user2 = web3.utils.keccak256("hu")
@@ -11,155 +10,135 @@ const user3 = web3.utils.keccak256("moshe hakengeru")
 const asset0 = web3.utils.keccak256("gold")
 const asset1 = web3.utils.keccak256("silver")
 
-contract("ClaimMachine", accounts => {
+const startBlock = 12139493
+
+contract("ScoreMachine", accounts => {
   beforeEach('initing', async () => {
-    claimMachine = await ClaimMachine.new()
-    epoch = Number((await claimMachine.EPOCH()).toString(10))
+    scoreMachine = await ScoreMachine.new()
+    // 12k coins per block for asset 0
+    await scoreMachine.setSpeedMock(asset0, 12, 1000, startBlock)
+
+    // 1,100 coins per block for asset 1
+    await scoreMachine.setSpeedMock(asset1, 11, 100, startBlock)    
   })
   afterEach(async () => {
   })
 
-  it("check score increase after update balance", async function() {
-    let time = (await web3.eth.getBlock("latest")).timestamp    
-    await claimMachine.updateScoreMock(user0, asset0, "6", time)
-    time += 111
+  it("test close function", async function() {
+    assert(close(1023, 1023))
+    assert(close(10230000000000, 10230000000001))
+    assert(close(10230000000002, 10230000000001))    
+    assert(!close(10230000000002, 102300000000010))   
+    assert(!close(102300000000020, 10230000000001))    
+  })  
 
-    const newScore = await claimMachine.getScore(user0, asset0, time)
+  it("check score increase after single user update balance", async function() {
+    let block = startBlock + 123
 
-    assert.equal(newScore.toString(10), "666", "unexpected new score")
+    //updateScoreMock(bytes32 user, bytes32 asset, int96 dbalance, uint96 expectedBalance, uint32 blockNumber)    
+    await scoreMachine.updateScoreMock(user0, asset0, 2005, 2005, block)
+    const balance = await scoreMachine.getCurrentBalance(user0, asset0)
+    assert.equal(balance.toString(), "2005")
+
+    /*
+    console.log("user data", await scoreMachine.getUserData(asset0, user0))
+    console.log("global data", await scoreMachine.getGlobalData(asset0))
+    console.log("distribution data", await scoreMachine.getDistributionData(asset0))
+    */
+
+    block += 100
+
+    const indexDiff = await scoreMachine.calcScoreIndexDebug(asset0, block)
+    const expectedIndexDiff = parseInt(12 * 1e10 * 100 / 2005)
+    assert.equal(indexDiff.toString(), expectedIndexDiff.toString(), "unexpected index diff")
+
+    const newScore = await scoreMachine.getScore(user0, asset0, block)
+    assert(close(newScore, (12000 * 100 * 1e10)), "unexpected new score")
   })
 
-  it("check score decrease after update balance", async function() {
-    let time = (await web3.eth.getBlock("latest")).timestamp
-    await claimMachine.updateScoreMock(user0, asset0, "6", time)
-    time += 111
-    await claimMachine.updateScoreMock(user0, asset0, -3, time)
-    time += 10
+  it("check single user that entered with previous balance", async function() {
+    let block = startBlock + 123
 
-    const newScore = await claimMachine.getScore(user0, asset0, time)
+    //updateScoreMock(bytes32 user, bytes32 asset, int96 dbalance, uint96 expectedBalance, uint32 blockNumber)    
+    await scoreMachine.updateScoreMock(user0, asset0, 0, 2004, block)
+    const balance = await scoreMachine.getCurrentBalance(user0, asset0)
+    assert.equal(balance.toString(), "2004")
 
-    assert.equal(newScore.toString(10), (6*121 - 3*10).toString(), "unexpected new score")
+    block += 100
+
+    const newScore = await scoreMachine.getScore(user0, asset0, block)
+    assert(close(newScore, (12000 * 100 * 1e10)), "unexpected new score")
   })
   
-  it("test global score", async function() {
-    let time = (await web3.eth.getBlock("latest")).timestamp
+  it("check two users with balance increase", async function() {
+    let block = startBlock + 123
 
-    await claimMachine.updateScoreMock(user0, asset0, "6", time)
-    await claimMachine.updateScoreMock(user1, asset0, "7", time)
-    await claimMachine.updateScoreMock(user0, asset1, "8", time)
-    await claimMachine.updateScoreMock(user1, asset1, "9", time)
+    //updateScoreMock(bytes32 user, bytes32 asset, int96 dbalance, uint96 expectedBalance, uint32 blockNumber)    
+    await scoreMachine.updateScoreMock(user0, asset0, 1000, 1000, block)
+    block += 100
+    await scoreMachine.updateScoreMock(user1, asset0, 2000, 2000, block)
+    block += 100
 
-    time += 111
+    const newScore0 = await scoreMachine.getScore(user0, asset0, block)
+    const newScore1 = await scoreMachine.getScore(user1, asset0, block)
 
-    let score00 = await claimMachine.getScore(user0, asset0, time)
-    let score01 = await claimMachine.getScore(user0, asset1, time)    
+    /*
+    console.log("user data 0", await scoreMachine.getUserData(asset0, user0))
+    console.log("user data 1", await scoreMachine.getUserData(asset0, user1))
 
-    let score10 = await claimMachine.getScore(user1, asset0, time)
-    let score11 = await claimMachine.getScore(user1, asset1, time)
+    console.log("global data", await scoreMachine.getGlobalData(asset0))
+    */
 
-    assert.equal(score00.toString(10), (6 * 111).toString(10))
-    assert.equal(score10.toString(10), (7 * 111).toString(10))    
-    assert.equal(score01.toString(10), (8 * 111).toString(10))
-    assert.equal(score11.toString(10), (9 * 111).toString(10))
 
-    let global0 = await claimMachine.getGlobalScore(asset0, time)
-    let global1 = await claimMachine.getGlobalScore(asset1, time)
-
-    assert.equal(global0.toString(10), (score00.add(score10)).toString(10))
-    assert.equal(global1.toString(10), (score01.add(score11)).toString(10))    
-
-    await claimMachine.updateScoreMock(user0, asset0, -1, time)
-    await claimMachine.updateScoreMock(user1, asset0, -5, time)
-    await claimMachine.updateScoreMock(user0, asset1, -8, time)
-    await claimMachine.updateScoreMock(user1, asset1, -3, time)
-
-    time += 112
-
-    score00 = await claimMachine.getScore(user0, asset0, time)
-    score01 = await claimMachine.getScore(user0, asset1, time)    
-
-    score10 = await claimMachine.getScore(user1, asset0, time)
-    score11 = await claimMachine.getScore(user1, asset1, time)
-
-    assert.equal(score00.toString(10), (6 * (111 + 112) - 1 * (112)).toString())
-    assert.equal(score10.toString(10), (7 * (111 + 112) - 5 * (112)).toString())    
-    assert.equal(score01.toString(10), (8 * (111 + 112) - 8 * (112)).toString())
-    assert.equal(score11.toString(10), (9 * (111 + 112) - 3 * (112)).toString())
-
-    global0 = await claimMachine.getGlobalScore(asset0, time)
-    global1 = await claimMachine.getGlobalScore(asset1, time)
-
-    assert.equal(global0.toString(10), score00.add(score10).toString(10))
-    assert.equal(global1.toString(10), score01.add(score11).toString(10))    
+    assert(close(newScore0, (12000 * 100 * 1e10 + 1 * 12000 * 100 * 1e10 / 3)), "unexpected new score0 " + newScore0.toString())
+    assert(close(newScore1, (0                  + 2 * 12000 * 100 * 1e10 / 3)), "unexpected new score1 " + newScore1.toString())
   })
+  
+  it("check two users with external slash", async function() {
+    let block = startBlock + 123
 
-  it("update score in 4 epochs", async function() {
-    let balance = 0
-    let time = (await web3.eth.getBlock("latest")).timestamp
+    //updateScoreMock(bytes32 user, bytes32 asset, int96 dbalance, uint96 expectedBalance, uint32 blockNumber)
+    await scoreMachine.updateScoreMock(user0, asset0, 1000, 1000, block)
+    block += 100
+    await scoreMachine.updateScoreMock(user1, asset0, 2000, 2000, block)
+    block += 100
 
-    await updateAndIncreaseTime(user0, asset0, 123, time, time +=100, "1")
-    await updateAndIncreaseTime(user0, asset0, 133, time, time += 200, "2")    
-    await updateAndIncreaseTime(user0, asset0, 765, time, time += epoch, "3")
-    await updateAndIncreaseTime(user0, asset0, 675, time, time +=epoch, "4")
-    await updateAndIncreaseTime(user0, asset0, 3675, time, time += epoch, "5")
-    await updateAndIncreaseTime(user0, asset0, 35, time, time += epoch + 9, "6")    
+    const newScore0 = await scoreMachine.getScore(user0, asset0, block)
+    const newScore1 = await scoreMachine.getScore(user1, asset0, block)
+
+    assert(close(newScore0, (12000 * 100 * 1e10 + 1 * 12000 * 100 * 1e10 / 3)), "unexpected new score0 " + newScore0.toString())
+    assert(close(newScore1, (0                  + 2 * 12000 * 100 * 1e10 / 3)), "unexpected new score1 " + newScore1.toString())
+
+    // slash first user for 100
+    await scoreMachine.updateScoreMock(user0, asset0, 0, 900, block)
+
+    const expectedSlashScore = newScore0.div(toBN(10))
+    // 900/2900 of slashed score goes to user0, and 2000/2900 to user0
+    const expectedScoreAfterSlash0 = newScore0.sub(expectedSlashScore).add(expectedSlashScore.mul(toBN(9)).div(toBN(29)))
+    const expectedScoreAfterSlash1 = newScore1.add(expectedSlashScore.mul(toBN(20)).div(toBN(29)))
+
+    const newScoreAfterSlash0 = await scoreMachine.getScore(user0, asset0, block)
+    const newScoreAfterSlash1 = await scoreMachine.getScore(user1, asset0, block)
+
+    assert(close(expectedScoreAfterSlash1, newScoreAfterSlash1), "unexpected score1 after slash")    
+    assert(close(expectedScoreAfterSlash0, newScoreAfterSlash0), "unexpected score0 after slash")
   })
 })
 
-async function updateAndIncreaseTime(user, asset, value, t0, t1, errMsg) {
-  const balanceBefore = await claimMachine.getCurrentBalance(user, asset)
-  const scoreBefore = await claimMachine.getScore(user, asset, t0)
-  await claimMachine.updateScoreMock(user, asset, value, t0)
-  const score = await claimMachine.getScore(user, asset, t1)
-  const dTimeBN = new web3.utils.toBN(t1 - t0)
-  const balanceBN = new web3.utils.toBN(value).add(balanceBefore)
-  //console.log("balance", balanceBN.toString())
-  //console.log("score after/before", score.toString(), scoreBefore.toString())
-  //console.log(await claimMachine.getLatestScoreIndex(user, asset))
-  //console.log("balance, dtime", balanceBN.toString(), dTimeBN.toString())
-  assert.equal(score.sub(scoreBefore).toString(),(balanceBN.mul(dTimeBN)).toString(), errMsg)
+
+function toBN(n) {
+  return web3.utils.toBN(n)
 }
 
-async function increaseTime (addSeconds) {
-  const util = require('util')
-  const providerSendAsync = util.promisify((getTestProvider()).send).bind(
-    getTestProvider()
-  )
+function close(n1, n2) {
+  const bigN1 = new web3.utils.toBN(n1)
+  const bigN2 = new web3.utils.toBN(n2)
 
-  /*
-      getTestProvider().send({
-              jsonrpc: "2.0",
-              method: "evm_increaseTime",
-              params: [addSeconds], id: 0
-          }, console.log)
-  */
-  await providerSendAsync({
-    jsonrpc: '2.0',
-    method: 'evm_increaseTime',
-    params: [addSeconds],
-    id: 1
-  })
-}
+  const num = new web3.utils.toBN("1000001")
+  const den = new web3.utils.toBN("1000000")
 
-async function mineBlock () {
-  const util = require('util')
-  const providerSendAsync = util.promisify((getTestProvider()).send).bind(
-    getTestProvider()
-  )
-  await providerSendAsync({
-    jsonrpc: '2.0',
-    method: 'evm_mine',
-    params: [],
-    id: 1
-  })
-}
+  if(bigN1.lt(bigN2)) return close(n2, n1)
+  if(bigN1.mul(den).gt(bigN2.mul(num))) return false
 
-function getTestProvider () {
-  return web3.currentProvider
-}
-
-async function getTxTime(operation) {
-  const tx = await operation
-  const blockHash = tx.receipt.blockHash
-  return (await web3.eth.getBlock(blockHash)).timestamp
+  return true
 }

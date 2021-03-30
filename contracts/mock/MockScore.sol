@@ -15,4 +15,10 @@ contract MockScoreMachine is ScoringMachine {
     function updateScoreMock(bytes32 user, bytes32 asset, int96 dbalance, uint96 expectedBalance, uint32 blockNumber) public {
         super.updateAssetScore(user, asset, dbalance, expectedBalance, blockNumber);
     }
+
+    function calcScoreIndexDebug(bytes32 asset, uint32 blockNumber) public view returns(uint64) {
+        AssetGlobalData storage globalData = assetData[asset].globalData;
+
+        return super.calcScoreIndex(globalData, blockNumber);
+    }
 }

@@ -45,6 +45,32 @@ contract ScoringMachine is Ownable {
     // mapping form asset to distribution data
     mapping(bytes32 => DistributionData) internal assetDistributionData;
 
+    function getUserData(bytes32 asset, bytes32 user) public view returns(uint96 score, uint96 balance, uint64 lastScoreIndex) {
+        AssetUserData storage data = assetData[asset].userData[user];
+        
+        score = data.score;
+        balance = data.balance;
+        lastScoreIndex = data.lastScoreIndex;
+    }
+
+    function getGlobalData(bytes32 asset) public view returns(uint96 balance, uint64 speed, uint64 scoreIndex, uint32 lastUpdateBlock) {
+        AssetGlobalData storage data = assetData[asset].globalData;
+
+        balance = data.balance;
+        speed = data.speed;
+        scoreIndex = data.scoreIndex;
+        lastUpdateBlock = data.lastUpdateBlock;
+    }
+
+    function getDistributionData(bytes32 asset) public view returns(uint speed, uint scoreNormFactor, uint lastSpeedUpdateBlock, uint totalDistributed) {
+        DistributionData storage data = assetDistributionData[asset];
+
+        speed = data.speed;
+        scoreNormFactor = data.scoreNormFactor;
+        lastSpeedUpdateBlock = data.lastSpeedUpdateBlock;
+        totalDistributed = data.totalDistributed;
+    }
+
     function setSpeed(bytes32 asset, uint speed, uint scoreNormFactor, uint blockNumber) internal {
         require(blockNumber <= uint32(-1), "setSpeed: blockNumber-overflow");
         updateAssetScore(bytes32(0), asset, 0, 0, uint32(blockNumber));
@@ -61,6 +87,7 @@ contract ScoringMachine is Ownable {
         require(data.totalDistributed <= uint128(-1), "setSpeed: totalDistributed overflow");
         data.totalDistributed += newlyDistributed;
         data.speed = speed;
+        data.lastSpeedUpdateBlock = blockNumber;
 
         require(scoreNormFactor <= uint96(-1), "setSpeed: scoreNormFactor-overflow");
         data.scoreNormFactor = scoreNormFactor;
@@ -70,13 +97,23 @@ contract ScoringMachine is Ownable {
         uint64 scoreIndexDiff = sub64(globalData.scoreIndex, userData.lastScoreIndex);
         uint96 slashedScore = mul96(uint96(scoreIndexDiff), balanceDiff);
 
+        // first update balances, only then update index. as slashed score should be distributed evenly among new balances
+        userData.balance = sub96(userData.balance, balanceDiff);
+        globalData.balance = sub96(globalData.balance, balanceDiff);
+
         uint96 slashedIndex = slashedScore / globalData.balance;
         require(slashedIndex <= uint64(-1), "slashAssetScore: slashedInex-overflow");
 
         globalData.scoreIndex = add64(globalData.scoreIndex, uint64(slashedIndex));
 
-        userData.balance = sub96(userData.balance, balanceDiff);
-        globalData.balance = sub96(globalData.balance, balanceDiff);
+    }
+
+    function calcScoreIndex(AssetGlobalData storage globalData, uint32 blockNumber) internal view returns(uint64) {
+        if(globalData.balance == 0) return globalData.scoreIndex;
+
+        uint64 diff = mulmulmuldiv(globalData.speed, INDEX_FACTOR, sub32(blockNumber, globalData.lastUpdateBlock), globalData.balance);
+
+        return add64(globalData.scoreIndex, diff);
     }
 
     function updateAssetScore(bytes32 user, bytes32 asset, int96 dbalance, uint96 expectedBalance, uint32 blockNumber) internal {
@@ -91,8 +128,7 @@ contract ScoringMachine is Ownable {
         // this supports user who entered before the upgrade
         if(userData.balance == 0) dbalance = int96(expectedBalance);
 
-        uint64 scoreIndexDiff = mulmulmuldiv(globalData.speed, INDEX_FACTOR, sub32(blockNumber, globalData.lastUpdateBlock), globalData.balance);
-        globalData.scoreIndex = add64(globalData.scoreIndex, scoreIndexDiff);
+        globalData.scoreIndex = calcScoreIndex(globalData, blockNumber);
         globalData.balance = add96(globalData.balance, dbalance);
         globalData.lastUpdateBlock = blockNumber;
 
@@ -103,11 +139,12 @@ contract ScoringMachine is Ownable {
         userData.balance = add96(userData.balance, dbalance);
     }
 
-    function getScore(bytes32 user, bytes32 asset) public view returns(uint96 score) {
+    function getScore(bytes32 user, bytes32 asset, uint32 blockNumber) public view returns(uint96 score) {
         AssetGlobalData storage globalData = assetData[asset].globalData;
         AssetUserData storage userData = assetData[asset].userData[user];
-
-        uint96 userScore = add96(userData.score, mul96(sub64(globalData.scoreIndex, userData.lastScoreIndex), userData.balance));
+        
+        uint64 scoreIndex = calcScoreIndex(globalData, blockNumber);
+        uint96 userScore = add96(userData.score, mul96(sub64(scoreIndex, userData.lastScoreIndex), userData.balance));
         return mul96(userScore, uint96(assetDistributionData[asset].scoreNormFactor));
     }
 
@@ -133,7 +170,7 @@ contract ScoringMachine is Ownable {
 
     function claimScore(bytes32 user, bytes32 asset, uint96 expectedBalance, uint32 blockNumber) internal returns(uint96 score) {
         updateAssetScore(user, asset, 0, expectedBalance, blockNumber);
-        score = getScore(user, asset);
+        score = getScore(user, asset, blockNumber);
 
         // cannot have overflow, as summing 96 bit integer
         assetDistributionData[asset].claimed[user] += uint(score);
@@ -199,6 +236,6 @@ contract ScoringMachine is Ownable {
         uint result = uint(x) * uint(y) * uint(z) / uint(w);
 
         require(result <= uint64(-1), "mulmulmuldiv: overflow");
-        r = uint64(r);
+        r = uint64(result);
     }
 }
