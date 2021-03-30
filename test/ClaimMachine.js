@@ -161,6 +161,34 @@ contract("ScoreMachine", accounts => {
     const expectedTotalScore = (12 * 2 + 13 * 3 + 14 * 10) * 1000 * 1e10
 
     assert.equal(totalScore.toString(), expectedTotalScore.toString(), "unexpected total score")
+  })
+
+  it("check two users with balance increase and decrease", async function() {
+    let block = startBlock + 123
+
+    //updateScoreMock(bytes32 user, bytes32 asset, int96 dbalance, uint96 expectedBalance, uint32 blockNumber)    
+    await scoreMachine.updateScoreMock(user0, asset0, 2000, 2000, block)
+    await scoreMachine.updateScoreMock(user1, asset0, 2000, 2000, block)
+
+    block += 100
+
+    let score0 = await scoreMachine.getScore(user0, asset0, block)
+    let score1 = await scoreMachine.getScore(user1, asset0, block)
+
+    assert(close(score0, 12000 * 100 * 1e10 / 2), "unexpected score0 " + score0.toString())
+    assert(close(score1, 12000 * 100 * 1e10 / 2), "unexpected score1 " + score1.toString())
+
+    await scoreMachine.updateScoreMock(user0, asset0, -1000, 1000, block)
+    assert.equal((await scoreMachine.getCurrentBalance(user0, asset0)).toString(), "1000", "unexpected balance")
+
+    block += 100
+
+    score0 = await scoreMachine.getScore(user0, asset0, block)
+    score1 = await scoreMachine.getScore(user1, asset0, block)
+
+    assert(close(score1, 12000 * 100 * 1e10 / 2 + 2 * 12000 * 100 * 1e10 / 3), "unexpected score1 " + score1.toString())    
+    assert(close(score0, 12000 * 100 * 1e10 / 2 + 1 * 12000 * 100 * 1e10 / 3), "unexpected score0 " + score0.toString())
+    
   })  
 })
 

@@ -114,7 +114,7 @@ contract ScoringMachine is Ownable {
         AssetGlobalData storage globalData = assetData[asset].globalData;
         AssetUserData storage userData = assetData[asset].userData[user];
 
-        uint96 expectedBalanceBeforeUpdate = add96(expectedBalance, dbalance);
+        uint96 expectedBalanceBeforeUpdate = sub96(expectedBalance, dbalance);
         if(expectedBalanceBeforeUpdate < userData.balance) {
             slashAssetScore(userData, globalData, sub96(userData.balance, expectedBalanceBeforeUpdate));
         }
@@ -206,6 +206,13 @@ contract ScoringMachine is Ownable {
 
         return z;
     }
+
+    function sub96(uint96 x, int96 y) internal pure returns (uint96 z) {
+        require(int96(x) >= y, "sub96: overflow");
+        z = uint96(int96(x) - y);
+
+        return z;
+    }    
 
     function sub64(uint64 x, uint64 y) internal pure returns (uint64 z) {
         z = uint64(sub96(uint96(x), uint96(y)));
