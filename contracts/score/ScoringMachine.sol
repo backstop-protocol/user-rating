@@ -170,7 +170,12 @@ contract ScoringMachine is Ownable {
 
     function claimScore(bytes32 user, bytes32 asset, uint96 expectedBalance, uint32 blockNumber) internal returns(uint96 score) {
         updateAssetScore(user, asset, 0, expectedBalance, blockNumber);
-        score = getScore(user, asset, blockNumber);
+        uint96 fullScore = getScore(user, asset, blockNumber);
+
+        uint claimedScore = assetDistributionData[asset].claimed[user];
+        require(claimedScore <= uint96(-1), "claimScore: overflow");
+
+        score = sub96(fullScore, uint96(claimedScore));
 
         // cannot have overflow, as summing 96 bit integer
         assetDistributionData[asset].claimed[user] += uint(score);

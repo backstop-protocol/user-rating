@@ -123,6 +123,30 @@ contract("ScoreMachine", accounts => {
     assert(close(expectedScoreAfterSlash1, newScoreAfterSlash1), "unexpected score1 after slash")    
     assert(close(expectedScoreAfterSlash0, newScoreAfterSlash0), "unexpected score0 after slash")
   })
+
+  it("check claim score", async function() {
+    let block = startBlock + 123
+
+    //updateScoreMock(bytes32 user, bytes32 asset, int96 dbalance, uint96 expectedBalance, uint32 blockNumber)
+    await scoreMachine.updateScoreMock(user0, asset0, 1000, 1000, block)
+    block += 100
+
+    const newScore0 = await scoreMachine.getScore(user0, asset0, block)
+
+    assert(close(newScore0, 12000 * 100 * 1e10), "unexpected new score0 " + newScore0.toString())
+
+    let collectedScore = await scoreMachine.claimScoreMock.call(user0, asset0, 1000, block)
+    await scoreMachine.claimScoreMock(user0, asset0, 1000, block)
+    assert.equal(collectedScore.toString(), newScore0.toString(), "unexpected collected score")
+
+    block += 200
+    collectedScore = await scoreMachine.claimScoreMock.call(user0, asset0, 1000, block)
+    await scoreMachine.claimScoreMock(user0, asset0, 1000, block)    
+    assert.equal(collectedScore.toString(), newScore0.mul(toBN(2)).toString(), "unexpected collected score")
+
+    collectedScore = await scoreMachine.claimScoreMock.call(user0, asset0, 1000, block)
+    assert.equal(collectedScore.toString(), "0", "unexpected collected score")        
+  })  
 })
 
 
