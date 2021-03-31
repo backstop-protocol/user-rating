@@ -287,8 +287,7 @@ contract("ScoreMachine", accounts => {
     assert(close(score1,  0           + 2 * 12000 * 100 / 3), "unexpected score1 " + score1.toString())
   })
   
-  it("test with big numbers", async function() {
-    
+  it("test with big numbers", async function() {    
     const speed = toBN(10000).mul(toBN(1e18)) // 10k tokens per second
 
     await scoreMachine.setSpeedMock(asset0, speed, startBlock)
@@ -318,6 +317,51 @@ contract("ScoreMachine", accounts => {
 
     assert(close(score0post,  speed.mul(toBN(100)).div(toBN(2))), "unexpected score0post " + score0post.toString())
     assert(close(score1post,  speed.mul(toBN(100)).div(toBN(2))), "unexpected score0post " + score1post.toString())        
+  })
+  
+  it("test overflow", async function() {    
+    const speed = toBN(2).pow(toBN(96)).sub(toBN(1))
+    await scoreMachine.setSpeedMock(asset0, speed, startBlock)
+
+    let block = startBlock + 123
+
+    await scoreMachine.updateScoreMock(user0, asset0, 100, 100, block)
+
+    block += 100
+
+    let wasError = false
+    try {
+      await scoreMachine.getScore(user0, asset0, block)      
+    }
+    catch(error) {
+      assert.equal(error.message, "Returned error: VM Exception while processing transaction: revert mul96: overflow")
+      wasError = true
+    }
+
+    assert(wasError, "expected to revert")
+
+    wasError = false
+    try {
+      await scoreMachine.updateScoreMock(user0, asset0, 100, 200, block)  
+    }
+    catch(error) {
+      assert.equal(error.message, "Returned error: VM Exception while processing transaction: revert mul96: overflow -- Reason given: mul96: overflow.")
+      wasError = true
+    }    
+
+    assert(wasError, "expected to revert")
+    
+    wasError = false
+    try {
+      // simulate slashing
+      await scoreMachine.updateScoreMock(user0, asset0, 100, 0, block)  
+    }
+    catch(error) {
+      assert.equal(error.message, "Returned error: VM Exception while processing transaction: revert sub128: overflow -- Reason given: sub128: overflow.")
+      wasError = true
+    }    
+
+    assert(wasError, "expected to revert")       
   })  
 })
 
