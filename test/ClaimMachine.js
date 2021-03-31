@@ -285,6 +285,39 @@ contract("ScoreMachine", accounts => {
 
     assert(close(score0,  12000 * 100 + 1 * 12000 * 100 / 3), "unexpected score0 " + score0.toString())
     assert(close(score1,  0           + 2 * 12000 * 100 / 3), "unexpected score1 " + score1.toString())
+  })
+  
+  it("test with big numbers", async function() {
+    
+    const speed = toBN(10000).mul(toBN(1e18)) // 10k tokens per second
+
+    await scoreMachine.setSpeedMock(asset0, speed, startBlock)
+
+    let block = startBlock + 123
+    const userBalance0 = toBN(100).mul(toBN(2).pow(toBN(112))) // balance of 100e112
+    const userBalance1 = toBN(200).mul(toBN(2).pow(toBN(112))) // balance of 100e112
+
+
+    await scoreMachine.updateScoreMock(user0, asset0, userBalance0, userBalance0, block)
+    await scoreMachine.updateScoreMock(user1, asset0, userBalance1, userBalance1, block)
+
+    block += 100
+
+    const score0 = await scoreMachine.getScore(user0, asset0, block)
+    const score1 = await scoreMachine.getScore(user1, asset0, block)
+
+    assert(close(score0,  speed.mul(toBN(100)).div(toBN(3))), "unexpected score0 " + score0.toString())
+    assert(close(score1,  speed.mul(toBN(200)).div(toBN(3))), "unexpected score1 " + score1.toString())
+
+    await scoreMachine.updateScoreMock(user1, asset0, userBalance0.mul(toBN(-1)), userBalance0, block)
+
+    block += 100
+    
+    const score0post = (await scoreMachine.getScore(user0, asset0, block)).sub(score0)
+    const score1post = (await scoreMachine.getScore(user1, asset0, block)).sub(score1)
+
+    assert(close(score0post,  speed.mul(toBN(100)).div(toBN(2))), "unexpected score0post " + score0post.toString())
+    assert(close(score1post,  speed.mul(toBN(100)).div(toBN(2))), "unexpected score0post " + score1post.toString())        
   })  
 })
 
